@@ -1,0 +1,144 @@
+.notificationsContainer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.notificationsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.notificationsTitle {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1877f2;
+  margin: 0;
+}
+
+.loading, .emptyNotifications {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  text-align: center;
+  color: #65676b;
+}
+
+.notificationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notificationItem {
+  display: flex;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.notificationItem:hover {
+  background-color: #f0f2f5;
+}
+
+.unread {
+  background-color: #e6f2ff;
+}
+
+.unread:hover {
+  background-color: #d9ecff;
+}
+
+.notificationSender {
+  margin-right: 1rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.senderAvatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.senderAvatarPlaceholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #1877f2;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.25rem;
+}
+
+.notificationContent {
+  flex: 1;
+}
+
+.notificationHeader {
+  margin-bottom: 0.5rem;
+}
+
+.senderName {
+  font-weight: 600;
+  text-decoration: none;
+  color: inherit;
+  margin-right: 0.25rem;
+}
+
+.notificationText {
+  color: #050505;
+}
+
+.notificationTime {
+  font-size: 0.8rem;
+  color: #65676b;
+}
+
+.notificationActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.unreadIndicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #1877f2;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+@media (max-width: 576px) {
+  .notificationsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .notificationItem {
+    flex-direction: column;
+  }
+  
+  .notificationSender {
+    margin-right: 0;
+    margin-bottom: 0.75rem;
+  }
+  
+  .unreadIndicator {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+}
