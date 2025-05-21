@@ -1,0 +1,154 @@
+.groupsContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.groupsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.groupsTitle {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1877f2;
+  margin: 0;
+}
+
+.groupsTabs {
+  display: flex;
+  margin-bottom: 1.5rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.tabButton {
+  flex: 1;
+  padding: 1rem;
+  background: none;
+  border: none;
+  font-weight: 500;
+  color: #65676b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabButton:hover {
+  background-color: #f0f2f5;
+}
+
+.activeTab {
+  color: #1877f2;
+  border-bottom: 2px solid #1877f2;
+}
+
+.loading, .emptyGroups {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  text-align: center;
+  color: #65676b;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.emptyGroups p {
+  margin-bottom: 1.5rem;
+}
+
+.groupsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.groupCard {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.groupCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.groupCover {
+  height: 120px;
+  position: relative;
+  background-color: #f0f2f5;
+}
+
+.defaultCover {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(45deg, #1877f2, #0099ff);
+}
+
+.groupInfo {
+  padding: 1rem;
+}
+
+.groupName {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.groupPrivacy {
+  color: #65676b;
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.groupMembers {
+  color: #65676b;
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.groupDescription {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #050505;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.groupActions {
+  padding: 1rem;
+  border-top: 1px solid #f0f2f5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.viewGroupLink {
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .groupsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .groupsGrid {
+    grid-template-columns: 1fr;
+  }
+}
