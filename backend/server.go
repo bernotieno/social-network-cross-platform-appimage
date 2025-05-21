@@ -57,6 +57,10 @@ func main() {
 
 	// Register routes
 	registerRoutes(r, h)
+	// Handle all OPTIONS requests so CORS middleware runs
+r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    w.WriteHeader(http.StatusOK)
+})
 
 	// Create server
 	srv := &http.Server{
@@ -66,6 +70,8 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+
 
 	// Start server in a goroutine
 	go func() {
