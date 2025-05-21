@@ -75,7 +75,7 @@ A Facebook-like social network application with a Next.js frontend and Go backen
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/social-network.git
+   git clone https://github.com/bernotieno/social-network.git
    cd social-network
    ```
 
