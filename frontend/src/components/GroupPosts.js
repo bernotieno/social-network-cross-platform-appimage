@@ -256,6 +256,7 @@ export default function GroupPosts({ groupId, isGroupMember }) {
                 onUpdate={handlePostUpdate}
                 onDelete={handlePostDelete}
                 isGroupPost={true}
+                groupId={groupId}
               />
             </div>
           ))
