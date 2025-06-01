@@ -83,6 +83,7 @@
   position: relative;
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start; /* Align items to top */
 }
 
 .profilePicture {
@@ -117,6 +118,9 @@
 .profileDetails {
   flex: 1;
   padding-top: 1rem;
+  min-width: 0; /* Allow flex item to shrink below content size */
+  display: flex;
+  flex-direction: column;
 }
 
 .profileName {
@@ -166,6 +170,9 @@
   margin-top: 1.5rem;
   display: flex;
   gap: 1rem;
+  align-self: flex-start; /* Prevent stretching with parent */
+  flex-shrink: 0; /* Prevent shrinking */
+  width: auto; /* Don't inherit parent width */
 }
 
 /* Profile Content */
