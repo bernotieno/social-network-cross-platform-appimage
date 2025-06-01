@@ -42,7 +42,6 @@ func (s *CommentService) Create(comment *Comment) error {
 		INSERT INTO comments (id, post_id, user_id, content, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
-
 	if err != nil {
 		return fmt.Errorf("failed to create comment: %w", err)
 	}
@@ -63,7 +62,6 @@ func (s *CommentService) GetByID(id string) (*Comment, error) {
 		&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.CreatedAt, &comment.UpdatedAt,
 		&comment.Author.ID, &comment.Author.Username, &comment.Author.FullName, &comment.Author.ProfilePicture,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("comment not found")
@@ -83,7 +81,6 @@ func (s *CommentService) Update(comment *Comment) error {
 		SET content = ?, updated_at = ?
 		WHERE id = ? AND user_id = ?
 	`, comment.Content, comment.UpdatedAt, comment.ID, comment.UserID)
-
 	if err != nil {
 		return fmt.Errorf("failed to update comment: %w", err)
 	}
@@ -101,7 +98,6 @@ func (s *CommentService) Delete(id, userID string) error {
 		JOIN posts p ON c.post_id = p.id
 		WHERE c.id = ?
 	`, id).Scan(&postOwnerID)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return errors.New("comment not found")
@@ -114,7 +110,6 @@ func (s *CommentService) Delete(id, userID string) error {
 		DELETE FROM comments
 		WHERE id = ? AND (user_id = ? OR ? = ?)
 	`, id, userID, userID, postOwnerID)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete comment: %w", err)
 	}
@@ -139,10 +134,9 @@ func (s *CommentService) GetCommentsByPost(postID string, limit, offset int) ([]
 		FROM comments c
 		JOIN users u ON c.user_id = u.id
 		WHERE c.post_id = ?
-		ORDER BY c.created_at ASC
+		ORDER BY c.created_at DESC
 		LIMIT ? OFFSET ?
 	`, postID, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get comments: %w", err)
 	}
