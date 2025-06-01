@@ -18,7 +18,9 @@ export default function Notifications() {
     isRefreshing,
     fetchNotifications,
     markAsRead,
-    markAllAsRead
+    markAllAsRead,
+    deleteNotification,
+    deleteAllNotifications
   } = useNotifications();
 
   useEffect(() => {
@@ -27,6 +29,20 @@ export default function Notifications() {
 
   const getNotificationContent = (notification) => {
     console.log("this is the notification", notification)
+
+    // Parse notification data if it's a string
+    let notificationData = {};
+    if (notification.data) {
+      try {
+        notificationData = typeof notification.data === 'string'
+          ? JSON.parse(notification.data)
+          : notification.data;
+      } catch (error) {
+        console.error('Error parsing notification data:', error);
+        notificationData = {};
+      }
+    }
+
     switch (notification.type) {
       case 'follow_request':
         return (
@@ -65,22 +81,26 @@ export default function Notifications() {
           </span>
         );
       case 'post_like':
+        const postContent = notificationData.postContent;
         return (
           <span className={styles.notificationText}>
-            liked your post
+            liked your post{postContent ? `: "${postContent}"` : ''}
           </span>
         );
       case 'post_comment':
+        const comment = notificationData.comment;
+        const postContentForComment = notificationData.postContent;
         return (
           <span className={styles.notificationText}>
-            commented on your post: "{notification.data?.comment}"
+            commented on your post{postContentForComment ? ` "${postContentForComment}"` : ''}:
+            {comment ? ` "${comment}"` : ' (comment unavailable)'}
           </span>
         );
       case 'group_invite':
         return (
           <>
             <span className={styles.notificationText}>
-              invited you to join the group "{notification.data?.groupName}"
+              invited you to join the group "{notificationData.groupName || 'Unknown Group'}"
             </span>
             <div className={styles.notificationActions}>
               <Button
@@ -104,7 +124,7 @@ export default function Notifications() {
         return (
           <>
             <span className={styles.notificationText}>
-              requested to join your group "{notification.data?.groupName}"
+              requested to join your group "{notificationData.groupName || 'Unknown Group'}"
             </span>
             <div className={styles.notificationActions}>
               <Button
@@ -128,7 +148,7 @@ export default function Notifications() {
         return (
           <>
             <span className={styles.notificationText}>
-              invited you to the event "{notification.data?.eventName}"
+              invited you to the event "{notificationData.eventName || 'Unknown Event'}"
             </span>
             <div className={styles.notificationActions}>
               <Button
@@ -211,13 +231,23 @@ export default function Notifications() {
           </div>
 
           {notifications && notifications.length > 0 && (
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={markAllAsRead}
-            >
-              Mark all as read
-            </Button>
+            <div className={styles.headerActions}>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={markAllAsRead}
+              >
+                Mark all as read
+              </Button>
+              <Button
+                variant="outline"
+                size="small"
+                onClick={deleteAllNotifications}
+                className={styles.deleteAllButton}
+              >
+                Clear all
+              </Button>
+            </div>
           )}
         </div>
 
@@ -234,7 +264,6 @@ export default function Notifications() {
               <div
                 key={notification.id}
                 className={`${styles.notificationItem} ${!notification.readAt ? styles.unread : ''}`}
-                onClick={() => markAsRead(notification.id)}
               >
                 <Link href={`/profile/${notification.sender.id}`} className={styles.notificationSender}>
                   {notification.sender.profilePicture ? (
@@ -259,7 +288,10 @@ export default function Notifications() {
                   )}
                 </Link>
 
-                <div className={styles.notificationContent}>
+                <div
+                  className={styles.notificationContent}
+                  onClick={() => markAsRead(notification.id)}
+                >
                   <div className={styles.notificationHeader}>
                     <Link href={`/profile/${notification.sender.id}`} className={styles.senderName}>
                       {notification.sender.fullName}
@@ -272,9 +304,21 @@ export default function Notifications() {
                   </div>
                 </div>
 
-                {!notification.readAt && (
-                  <div className={styles.unreadIndicator} />
-                )}
+                <div className={styles.notificationActions}>
+                  {!notification.readAt && (
+                    <div className={styles.unreadIndicator} />
+                  )}
+                  <button
+                    className={styles.deleteButton}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteNotification(notification.id);
+                    }}
+                    title="Delete notification"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             ))}
           </div>

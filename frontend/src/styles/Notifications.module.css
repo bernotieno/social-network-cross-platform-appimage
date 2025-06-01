@@ -53,6 +53,22 @@
   align-items: center;
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.deleteAllButton {
+  color: #e41e3f !important;
+  border-color: #e41e3f !important;
+}
+
+.deleteAllButton:hover {
+  background-color: #e41e3f !important;
+  color: white !important;
+}
+
 .loading, .emptyNotifications {
   display: flex;
   flex-direction: column;
@@ -142,8 +158,38 @@
 
 .notificationActions {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  margin-left: 1rem;
+  position: relative;
+}
+
+.deleteButton {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #65676b;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  opacity: 0;
+}
+
+.notificationItem:hover .deleteButton {
+  opacity: 1;
+}
+
+.deleteButton:hover {
+  background-color: #f0f2f5;
+  color: #e41e3f;
+  transform: scale(1.1);
 }
 
 .unreadIndicator {
@@ -151,9 +197,6 @@
   height: 10px;
   border-radius: 50%;
   background-color: #1877f2;
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
 }
 
 @media (max-width: 576px) {
@@ -186,8 +229,18 @@
     margin-bottom: 0.75rem;
   }
 
-  .unreadIndicator {
-    top: 0.75rem;
-    right: 0.75rem;
+  .notificationActions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+
+  .deleteButton {
+    opacity: 1;
+  }
+
+  .headerActions {
+    flex-wrap: wrap;
   }
 }
