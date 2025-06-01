@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -13,14 +14,14 @@ import (
 type NotificationType string
 
 const (
-	NotificationTypeFollowRequest   NotificationType = "follow_request"
-	NotificationTypeFollowAccepted  NotificationType = "follow_accepted"
-	NotificationTypeNewFollower     NotificationType = "new_follower"
-	NotificationTypePostLike        NotificationType = "post_like"
-	NotificationTypePostComment     NotificationType = "post_comment"
-	NotificationTypeGroupInvite     NotificationType = "group_invite"
+	NotificationTypeFollowRequest    NotificationType = "follow_request"
+	NotificationTypeFollowAccepted   NotificationType = "follow_accepted"
+	NotificationTypeNewFollower      NotificationType = "new_follower"
+	NotificationTypePostLike         NotificationType = "post_like"
+	NotificationTypePostComment      NotificationType = "post_comment"
+	NotificationTypeGroupInvite      NotificationType = "group_invite"
 	NotificationTypeGroupJoinRequest NotificationType = "group_join_request"
-	NotificationTypeEventInvite     NotificationType = "event_invite"
+	NotificationTypeEventInvite      NotificationType = "event_invite"
 )
 
 // Notification represents a notification
@@ -56,7 +57,6 @@ func (s *NotificationService) Create(notification *Notification) error {
 		INSERT INTO notifications (id, user_id, sender_id, type, content, data, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, notification.ID, notification.UserID, notification.SenderID, notification.Type, notification.Content, notification.Data, notification.CreatedAt)
-
 	if err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
 	}
@@ -79,7 +79,6 @@ func (s *NotificationService) GetByID(id string) (*Notification, error) {
 		&notification.ID, &notification.UserID, &notification.SenderID, &notification.Type, &notification.Content, &notification.Data, &readAt, &notification.CreatedAt,
 		&notification.Sender.ID, &notification.Sender.Username, &notification.Sender.FullName, &notification.Sender.ProfilePicture,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("notification not found")
@@ -105,7 +104,6 @@ func (s *NotificationService) GetByUser(userID string, limit, offset int) ([]*No
 		ORDER BY n.created_at DESC
 		LIMIT ? OFFSET ?
 	`, userID, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get notifications: %w", err)
 	}
@@ -126,6 +124,12 @@ func (s *NotificationService) GetByUser(userID string, limit, offset int) ([]*No
 
 		if readAt.Valid {
 			notification.ReadAt = &readAt.Time
+		}
+
+		// Enhance notification with additional data based on type
+		if err := s.enhanceNotificationData(notification); err != nil {
+			// Log error but don't fail the request
+			fmt.Printf("Warning: failed to enhance notification data: %v\n", err)
 		}
 
 		notifications = append(notifications, notification)
@@ -181,4 +185,142 @@ func (s *NotificationService) GetUnreadCount(userID string) (int, error) {
 	}
 
 	return count, nil
+}
+
+// Delete deletes a specific notification
+func (s *NotificationService) Delete(id, userID string) error {
+	// Check if notification belongs to user
+	var count int
+	err := s.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE id = ? AND user_id = ?", id, userID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check notification ownership: %w", err)
+	}
+
+	if count == 0 {
+		return errors.New("notification not found or not authorized")
+	}
+
+	// Delete the notification
+	_, err = s.DB.Exec("DELETE FROM notifications WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete notification: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteAll deletes all notifications for a user
+func (s *NotificationService) DeleteAll(userID string) error {
+	_, err := s.DB.Exec("DELETE FROM notifications WHERE user_id = ?", userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete all notifications: %w", err)
+	}
+
+	return nil
+}
+
+// enhanceNotificationData adds additional context to notifications based on their type
+func (s *NotificationService) enhanceNotificationData(notification *Notification) error {
+	switch notification.Type {
+	case NotificationTypePostLike:
+		return s.enhancePostLikeNotification(notification)
+	case NotificationTypePostComment:
+		return s.enhancePostCommentNotification(notification)
+	default:
+		return nil
+	}
+}
+
+// enhancePostLikeNotification adds post information to like notifications
+func (s *NotificationService) enhancePostLikeNotification(notification *Notification) error {
+	if notification.Data == "" {
+		return nil
+	}
+
+	// Parse the existing data
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(notification.Data), &data); err != nil {
+		return fmt.Errorf("failed to parse notification data: %w", err)
+	}
+
+	// Get post ID from data
+	postID, ok := data["postId"].(string)
+	if !ok {
+		return nil
+	}
+
+	// Fetch post information
+	var postContent string
+	err := s.DB.QueryRow("SELECT content FROM posts WHERE id = ?", postID).Scan(&postContent)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Post might have been deleted
+			data["postContent"] = "a deleted post"
+		} else {
+			return fmt.Errorf("failed to fetch post content: %w", err)
+		}
+	} else {
+		// Truncate content if too long
+		if len(postContent) > 50 {
+			postContent = postContent[:50] + "..."
+		}
+		data["postContent"] = postContent
+	}
+
+	// Update notification data
+	updatedData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated data: %w", err)
+	}
+	notification.Data = string(updatedData)
+
+	return nil
+}
+
+// enhancePostCommentNotification ensures comment data is properly formatted
+func (s *NotificationService) enhancePostCommentNotification(notification *Notification) error {
+	if notification.Data == "" {
+		return nil
+	}
+
+	// Parse the existing data to ensure it's valid JSON
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(notification.Data), &data); err != nil {
+		return fmt.Errorf("failed to parse notification data: %w", err)
+	}
+
+	// Get post ID and comment from data
+	postID, _ := data["postId"].(string)
+	comment, _ := data["comment"].(string)
+
+	// If we have post ID, get post content for context
+	if postID != "" {
+		var postContent string
+		err := s.DB.QueryRow("SELECT content FROM posts WHERE id = ?", postID).Scan(&postContent)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				data["postContent"] = "a deleted post"
+			}
+		} else {
+			// Truncate content if too long
+			if len(postContent) > 50 {
+				postContent = postContent[:50] + "..."
+			}
+			data["postContent"] = postContent
+		}
+	}
+
+	// Ensure comment is properly stored
+	if comment != "" {
+		data["comment"] = comment
+	}
+
+	// Update notification data
+	updatedData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated data: %w", err)
+	}
+	notification.Data = string(updatedData)
+
+	return nil
 }
