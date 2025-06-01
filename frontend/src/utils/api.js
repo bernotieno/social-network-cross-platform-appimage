@@ -184,6 +184,12 @@ export const groupAPI = {
   respondToEvent: (eventId, response) => api.post(`/groups/events/${eventId}/respond`, { response }),
   getGroupMessages: (groupId) => api.get(`/groups/${groupId}/messages`),
   sendGroupMessage: (groupId, content) => api.post(`/groups/${groupId}/messages`, { content }),
+  // Group post interactions
+  likeGroupPost: (groupId, postId) => api.post(`/groups/${groupId}/posts/${postId}/like`),
+  unlikeGroupPost: (groupId, postId) => api.delete(`/groups/${groupId}/posts/${postId}/like`),
+  getGroupPostComments: (groupId, postId) => api.get(`/groups/${groupId}/posts/${postId}/comments`),
+  addGroupPostComment: (groupId, postId, content) => api.post(`/groups/${groupId}/posts/${postId}/comments`, { content }),
+  deleteGroupPostComment: (groupId, postId, commentId) => api.delete(`/groups/${groupId}/posts/${postId}/comments/${commentId}`),
 };
 
 // Notification API calls
