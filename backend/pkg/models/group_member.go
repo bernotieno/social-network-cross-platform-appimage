@@ -61,7 +61,6 @@ func (s *GroupMemberService) Create(member *GroupMember) error {
 		INSERT INTO group_members (id, group_id, user_id, role, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, member.ID, member.GroupID, member.UserID, member.Role, member.Status, member.CreatedAt, member.UpdatedAt)
-
 	if err != nil {
 		return fmt.Errorf("failed to create group member: %w", err)
 	}
@@ -85,7 +84,6 @@ func (s *GroupMemberService) GetByID(id string) (*GroupMember, error) {
 		&member.User.ID, &member.User.Username, &member.User.FullName, &member.User.ProfilePicture,
 		&member.Group.ID, &member.Group.Name, &member.Group.Privacy,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("group member not found")
@@ -106,7 +104,6 @@ func (s *GroupMemberService) GetByGroupAndUser(groupID, userID string) (*GroupMe
 	`, groupID, userID).Scan(
 		&member.ID, &member.GroupID, &member.UserID, &member.Role, &member.Status, &member.CreatedAt, &member.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("group member not found")
@@ -124,7 +121,6 @@ func (s *GroupMemberService) UpdateStatus(id string, status GroupMemberStatus) e
 		SET status = ?, updated_at = ?
 		WHERE id = ?
 	`, status, time.Now(), id)
-
 	if err != nil {
 		return fmt.Errorf("failed to update group member status: %w", err)
 	}
@@ -139,7 +135,6 @@ func (s *GroupMemberService) UpdateRole(id string, role GroupMemberRole) error {
 		SET role = ?, updated_at = ?
 		WHERE id = ?
 	`, role, time.Now(), id)
-
 	if err != nil {
 		return fmt.Errorf("failed to update group member role: %w", err)
 	}
@@ -168,7 +163,6 @@ func (s *GroupMemberService) GetMembers(groupID string, limit, offset int) ([]*G
 		ORDER BY gm.role = 'admin' DESC, gm.created_at ASC
 		LIMIT ? OFFSET ?
 	`, groupID, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group members: %w", err)
 	}
@@ -204,7 +198,6 @@ func (s *GroupMemberService) GetPendingRequests(groupID string) ([]*GroupMember,
 		WHERE gm.group_id = ? AND gm.status = 'pending'
 		ORDER BY gm.created_at ASC
 	`, groupID)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending requests: %w", err)
 	}
@@ -235,10 +228,12 @@ func (s *GroupMemberService) IsGroupAdmin(groupID, userID string) (bool, error) 
 	var count int
 	err := s.DB.QueryRow(`
 		SELECT COUNT(*)
-		FROM group_members
-		WHERE group_id = ? AND user_id = ? AND role = 'admin' AND status = 'accepted'
-	`, groupID, userID).Scan(&count)
-
+		FROM (
+			SELECT 1 FROM groups WHERE id = ? AND creator_id = ?
+			UNION
+			SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND role = 'admin' AND status = 'accepted'
+		) AS admin_check
+	`, groupID, userID, groupID, userID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if user is admin: %w", err)
 	}
@@ -251,10 +246,12 @@ func (s *GroupMemberService) IsGroupMember(groupID, userID string) (bool, error)
 	var count int
 	err := s.DB.QueryRow(`
 		SELECT COUNT(*)
-		FROM group_members
-		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
-	`, groupID, userID).Scan(&count)
-
+		FROM (
+			SELECT 1 FROM groups WHERE id = ? AND creator_id = ?
+			UNION
+			SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+		) AS membership
+	`, groupID, userID, groupID, userID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if user is member: %w", err)
 	}
