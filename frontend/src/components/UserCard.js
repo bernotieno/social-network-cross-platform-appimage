@@ -70,7 +70,9 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
         </div>
 
         <div className={styles.userInfo}>
-          <h3 className={styles.userName}>{user.fullName}</h3>
+          <h3 className={styles.userName}>
+            {user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username}
+          </h3>
           <p className={styles.userUsername}>@{user.username}</p>
           {user.bio && (
             <p className={styles.userBio}>{user.bio}</p>
