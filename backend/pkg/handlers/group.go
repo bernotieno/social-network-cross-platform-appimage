@@ -9,6 +9,7 @@ import (
 	"github.com/bernaotieno/social-network/backend/pkg/middleware"
 	"github.com/bernaotieno/social-network/backend/pkg/models"
 	"github.com/bernaotieno/social-network/backend/pkg/utils"
+	"github.com/bernaotieno/social-network/backend/pkg/websocket"
 	"github.com/gorilla/mux"
 )
 
@@ -187,8 +188,12 @@ func (h *Handler) GetGroup(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	// Get group
 	group, err := h.GroupService.GetByID(groupID, currentUserID)
@@ -425,8 +430,12 @@ func (h *Handler) GetGroupPosts(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
@@ -557,8 +566,12 @@ func (h *Handler) GetGroupEvents(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
@@ -737,5 +750,418 @@ func (h *Handler) RespondToEvent(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondWithSuccess(w, http.StatusOK, "Response saved successfully", map[string]interface{}{
 		"response": req.Response,
+	})
+}
+
+// GetGroupMembers handles retrieving members of a group
+func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Get members
+	members, err := h.GroupMemberService.GetMembers(groupID, 100, 0) // Get up to 100 members
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get group members")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Group members retrieved successfully", map[string]interface{}{
+		"members": members,
+	})
+}
+
+// GetGroupPendingRequests handles retrieving pending join requests for a group
+func (h *Handler) GetGroupPendingRequests(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Check if user is an admin of the group
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can view pending requests")
+		return
+	}
+
+	// Get pending requests
+	requests, err := h.GroupMemberService.GetPendingRequests(groupID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get pending requests")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Pending requests retrieved successfully", map[string]interface{}{
+		"requests": requests,
+	})
+}
+
+// ApproveJoinRequest handles approving a join request
+func (h *Handler) ApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Check if current user is an admin of the group
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, currentUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can approve join requests")
+		return
+	}
+
+	// Get the pending member request
+	member, err := h.GroupMemberService.GetByGroupAndUser(groupID, req.UserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Join request not found")
+		return
+	}
+
+	if member.Status != models.GroupMemberStatusPending {
+		utils.RespondWithError(w, http.StatusBadRequest, "Request is not pending")
+		return
+	}
+
+	// Update status to accepted
+	if err := h.GroupMemberService.UpdateStatus(member.ID, models.GroupMemberStatusAccepted); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to approve request")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Join request approved successfully", nil)
+}
+
+// RejectJoinRequest handles rejecting a join request
+func (h *Handler) RejectJoinRequest(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Check if current user is an admin of the group
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, currentUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can reject join requests")
+		return
+	}
+
+	// Get the pending member request
+	member, err := h.GroupMemberService.GetByGroupAndUser(groupID, req.UserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Join request not found")
+		return
+	}
+
+	if member.Status != models.GroupMemberStatusPending {
+		utils.RespondWithError(w, http.StatusBadRequest, "Request is not pending")
+		return
+	}
+
+	// Delete the request (reject it)
+	if err := h.GroupMemberService.Delete(groupID, req.UserID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to reject request")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Join request rejected successfully", nil)
+}
+
+// InviteToGroup handles inviting a user to a group
+func (h *Handler) InviteToGroup(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Check if current user is an admin of the group
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, currentUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can invite users")
+		return
+	}
+
+	// Check if user is already a member
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, req.UserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check membership")
+		return
+	}
+
+	if isMember {
+		utils.RespondWithError(w, http.StatusConflict, "User is already a member of this group")
+		return
+	}
+
+	// Check if there's already a pending request
+	existingMember, err := h.GroupMemberService.GetByGroupAndUser(groupID, req.UserID)
+	if err == nil && existingMember.Status == models.GroupMemberStatusPending {
+		utils.RespondWithError(w, http.StatusConflict, "User already has a pending request for this group")
+		return
+	}
+
+	// Create group member with accepted status (invitation bypasses approval)
+	member := &models.GroupMember{
+		GroupID: groupID,
+		UserID:  req.UserID,
+		Role:    models.GroupMemberRoleMember,
+		Status:  models.GroupMemberStatusAccepted,
+	}
+
+	if err := h.GroupMemberService.Create(member); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to invite user")
+		return
+	}
+
+	// Get group info for notification
+	group, err := h.GroupService.GetByID(groupID, currentUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get group info")
+		return
+	}
+
+	// Create notification for invited user
+	notification := &models.Notification{
+		UserID:   req.UserID,
+		SenderID: currentUserID,
+		Type:     models.NotificationTypeGroupInvite,
+		Content:  "invited you to join the group",
+		Data:     `{"groupId":"` + groupID + `","groupName":"` + group.Name + `"}`,
+	}
+
+	if err := h.NotificationService.Create(notification); err != nil {
+		// Log error but don't fail the request
+		// TODO: Add proper logging
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "User invited successfully", nil)
+}
+
+// GetGroupMessages handles retrieving messages for a group
+func (h *Handler) GetGroupMessages(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Get messages
+	messages, err := h.MessageService.GetGroupMessages(groupID, 50, 0)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get group messages")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Group messages retrieved successfully", map[string]interface{}{
+		"messages": messages,
+	})
+}
+
+// SendGroupMessage handles sending a message to a group
+func (h *Handler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
+	// Get group ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+
+	// Get current user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.Content == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "Content is required")
+		return
+	}
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Create message
+	message := &models.Message{
+		SenderID: userID,
+		GroupID:  groupID,
+		Content:  req.Content,
+	}
+
+	// Save to database
+	if err := h.MessageService.Create(message); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to send message")
+		return
+	}
+
+	// Get user for response
+	user, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get user")
+		return
+	}
+	user.Password = ""
+
+	// Add sender to message for response
+	message.Sender = user
+
+	// Broadcast the message via WebSocket for real-time delivery
+	roomID := "group-" + groupID
+	responseMsg := map[string]interface{}{
+		"roomId": roomID,
+		"message": map[string]interface{}{
+			"id":        message.ID,
+			"content":   req.Content,
+			"sender":    userID,
+			"groupId":   groupID,
+			"timestamp": message.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			"senderInfo": map[string]interface{}{
+				"id":             user.ID,
+				"username":       user.Username,
+				"fullName":       user.FullName,
+				"profilePicture": user.ProfilePicture,
+			},
+		},
+	}
+
+	// Serialize the response message
+	data, err := json.Marshal(map[string]interface{}{
+		"type":    "new_message",
+		"payload": responseMsg,
+	})
+	if err == nil {
+		// Broadcast to the room via WebSocket
+		h.Hub.Broadcast <- &websocket.Broadcast{
+			RoomID:  roomID,
+			Message: data,
+			Sender:  nil, // No specific sender client since this is from HTTP API
+		}
+	}
+
+	utils.RespondWithSuccess(w, http.StatusCreated, "Message sent successfully", map[string]interface{}{
+		"message": message,
 	})
 }
