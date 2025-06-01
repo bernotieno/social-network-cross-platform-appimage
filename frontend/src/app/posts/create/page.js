@@ -6,12 +6,14 @@ import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { postAPI } from '@/utils/api';
 import { getImageUrl } from '@/utils/images';
+import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import styles from '@/styles/CreatePost.module.css';
 
 export default function CreatePost() {
   const { user } = useAuth();
+  const { showSuccess, showError } = useAlert();
   const router = useRouter();
 
   const [content, setContent] = useState('');
@@ -73,11 +75,16 @@ export default function CreatePost() {
       const response = await postAPI.createPost(formData);
       console.log('Post created:', response.data);
 
+      // Show success message
+      await showSuccess('Your post has been created successfully!', 'Post Created');
+
       // Redirect to home page after successful post creation
       router.push('/');
     } catch (error) {
       console.error('Error creating post:', error);
-      setError(error.response?.data?.message || 'Failed to create post. Please try again.');
+      const errorMessage = error.response?.data?.message || 'Failed to create post. Please try again.';
+      setError(errorMessage);
+      showError(errorMessage, 'Failed to Create Post');
     } finally {
       setIsSubmitting(false);
     }
