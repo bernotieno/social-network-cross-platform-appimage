@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/bernaotieno/social-network/backend/pkg/middleware"
 	"github.com/bernaotieno/social-network/backend/pkg/models"
@@ -13,9 +15,12 @@ import (
 
 // UpdateProfileRequest represents a profile update request
 type UpdateProfileRequest struct {
-	FullName  string `json:"fullName"`
-	Bio       string `json:"bio"`
-	IsPrivate bool   `json:"isPrivate"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	FullName    string `json:"fullName"`
+	DateOfBirth string `json:"dateOfBirth"` // Format: YYYY-MM-DD
+	Bio         string `json:"bio"`
+	IsPrivate   bool   `json:"isPrivate"`
 }
 
 // GetUsers handles retrieving a list of users
@@ -141,14 +146,85 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update user fields
-	user.FullName = req.FullName
+	// Validate and update username if provided
+	if req.Username != "" && req.Username != user.Username {
+		// Trim whitespace and validate
+		req.Username = strings.TrimSpace(req.Username)
+		if len(req.Username) < 3 {
+			utils.RespondWithError(w, http.StatusBadRequest, "Username must be at least 3 characters long")
+			return
+		}
+
+		// Check if username is already taken
+		existingUser, err := h.UserService.GetByUsername(req.Username)
+		if err == nil && existingUser.ID != userID {
+			utils.RespondWithError(w, http.StatusConflict, "Username is already taken")
+			return
+		}
+
+		user.Username = req.Username
+	}
+
+	// Validate and update email if provided
+	if req.Email != "" && req.Email != user.Email {
+		// Trim whitespace and validate
+		req.Email = strings.TrimSpace(req.Email)
+		if !isValidEmail(req.Email) {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid email format")
+			return
+		}
+
+		// Check if email is already taken
+		existingUser, err := h.UserService.GetByEmail(req.Email)
+		if err == nil && existingUser.ID != userID {
+			utils.RespondWithError(w, http.StatusConflict, "Email is already taken")
+			return
+		}
+
+		user.Email = req.Email
+	}
+
+	// Validate and update date of birth if provided
+	if req.DateOfBirth != "" {
+		// Parse date
+		dateOfBirth, err := time.Parse("2006-01-02", req.DateOfBirth)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid date format. Use YYYY-MM-DD")
+			return
+		}
+
+		// Check if date is not in the future
+		if dateOfBirth.After(time.Now()) {
+			utils.RespondWithError(w, http.StatusBadRequest, "Date of birth cannot be in the future")
+			return
+		}
+
+		// Check if user is at least 13 years old (basic age validation)
+		minAge := time.Now().AddDate(-13, 0, 0)
+		if dateOfBirth.After(minAge) {
+			utils.RespondWithError(w, http.StatusBadRequest, "You must be at least 13 years old")
+			return
+		}
+
+		user.DateOfBirth = &dateOfBirth
+	}
+
+	// Update other fields
+	if req.FullName != "" {
+		user.FullName = strings.TrimSpace(req.FullName)
+	}
 	user.Bio = req.Bio
 	user.IsPrivate = req.IsPrivate
 
 	// Save changes
 	if err := h.UserService.Update(user); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update profile")
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.username") {
+			utils.RespondWithError(w, http.StatusConflict, "Username is already taken")
+		} else if strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
+			utils.RespondWithError(w, http.StatusConflict, "Email is already taken")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update profile")
+		}
 		return
 	}
 
@@ -158,6 +234,12 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithSuccess(w, http.StatusOK, "Profile updated successfully", map[string]interface{}{
 		"user": user,
 	})
+}
+
+// isValidEmail validates email format
+func isValidEmail(email string) bool {
+	// Basic email validation
+	return strings.Contains(email, "@") && strings.Contains(email, ".") && len(email) > 5
 }
 
 // UploadAvatar handles uploading a user's profile picture
