@@ -1118,6 +1118,427 @@ func (h *Handler) RespondToGroupInvitation(w http.ResponseWriter, r *http.Reques
 	utils.RespondWithSuccess(w, http.StatusOK, responseMessage, nil)
 }
 
+// LikeGroupPost handles liking a group post
+func (h *Handler) LikeGroupPost(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and post ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["groupId"]
+	postID := vars["postId"]
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Check if group post exists
+	post, err := h.GroupPostService.GetByID(postID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Verify post belongs to the group
+	if post.GroupID != groupID {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found in this group")
+		return
+	}
+
+	// Like post
+	if err := h.LikeService.Create(postID, userID); err != nil {
+		if err.Error() == "post already liked by user" {
+			utils.RespondWithError(w, http.StatusConflict, "Post already liked")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to like post")
+		}
+		return
+	}
+
+	// Create notification for post owner (if not the same user)
+	if post.UserID != userID {
+		notification := &models.Notification{
+			UserID:   post.UserID,
+			SenderID: userID,
+			Type:     "post_like",
+			Content:  "liked your group post",
+			Data:     `{"postId":"` + postID + `","groupId":"` + groupID + `"}`,
+		}
+
+		if err := h.NotificationService.Create(notification); err != nil {
+			// Log error but don't fail the request
+			// TODO: Add proper logging
+		}
+	}
+
+	// Broadcast like event via WebSocket
+	likeEvent := map[string]interface{}{
+		"postId":  postID,
+		"groupId": groupID,
+		"userId":  userID,
+		"action":  "like",
+	}
+
+	message := &websocket.Message{
+		Type:    "group_post_like",
+		Content: likeEvent,
+	}
+
+	messageData, _ := json.Marshal(message)
+
+	// Broadcast to group members
+	h.Hub.Broadcast <- &websocket.Broadcast{
+		RoomID:  "group_" + groupID,
+		Message: messageData,
+		Sender:  nil,
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Post liked successfully", nil)
+}
+
+// UnlikeGroupPost handles unliking a group post
+func (h *Handler) UnlikeGroupPost(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and post ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["groupId"]
+	postID := vars["postId"]
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Check if group post exists
+	post, err := h.GroupPostService.GetByID(postID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Verify post belongs to the group
+	if post.GroupID != groupID {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found in this group")
+		return
+	}
+
+	// Unlike post
+	if err := h.LikeService.Delete(postID, userID); err != nil {
+		if err.Error() == "like not found" {
+			utils.RespondWithError(w, http.StatusNotFound, "Post not liked")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to unlike post")
+		}
+		return
+	}
+
+	// Broadcast unlike event via WebSocket
+	unlikeEvent := map[string]interface{}{
+		"postId":  postID,
+		"groupId": groupID,
+		"userId":  userID,
+		"action":  "unlike",
+	}
+
+	message := &websocket.Message{
+		Type:    "group_post_like",
+		Content: unlikeEvent,
+	}
+
+	messageData, _ := json.Marshal(message)
+
+	// Broadcast to group members
+	h.Hub.Broadcast <- &websocket.Broadcast{
+		RoomID:  "group_" + groupID,
+		Message: messageData,
+		Sender:  nil,
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Post unliked successfully", nil)
+}
+
+// GetGroupPostComments handles retrieving comments for a group post
+func (h *Handler) GetGroupPostComments(w http.ResponseWriter, r *http.Request) {
+	// Get group ID and post ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["groupId"]
+	postID := vars["postId"]
+
+	// Get current user ID from context
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, currentUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Check if group post exists
+	post, err := h.GroupPostService.GetByID(postID, currentUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Verify post belongs to the group
+	if post.GroupID != groupID {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found in this group")
+		return
+	}
+
+	// Get comments
+	comments, err := h.CommentService.GetCommentsByPost(postID, 50, 0)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get comments")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Comments retrieved successfully", map[string]interface{}{
+		"comments": comments,
+	})
+}
+
+// AddGroupPostComment handles adding a comment to a group post
+func (h *Handler) AddGroupPostComment(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and post ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["groupId"]
+	postID := vars["postId"]
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Check if group post exists
+	post, err := h.GroupPostService.GetByID(postID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Verify post belongs to the group
+	if post.GroupID != groupID {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found in this group")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate content
+	if req.Content == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "Content is required")
+		return
+	}
+
+	// Create comment
+	comment := &models.Comment{
+		PostID:  postID,
+		UserID:  userID,
+		Content: req.Content,
+	}
+
+	if err := h.CommentService.Create(comment); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create comment")
+		return
+	}
+
+	// Get user for response
+	user, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get user")
+		return
+	}
+	user.Password = ""
+
+	// Add user to comment for response
+	comment.Author = user
+
+	// Create notification for post owner (if not the same user)
+	if post.UserID != userID {
+		notification := &models.Notification{
+			UserID:   post.UserID,
+			SenderID: userID,
+			Type:     "post_comment",
+			Content:  "commented on your group post",
+			Data:     `{"postId":"` + postID + `","groupId":"` + groupID + `","comment":"` + req.Content + `"}`,
+		}
+
+		if err := h.NotificationService.Create(notification); err != nil {
+			// Log error but don't fail the request
+			// TODO: Add proper logging
+		}
+	}
+
+	// Broadcast new comment event via WebSocket
+	newCommentEvent := map[string]interface{}{
+		"postId":  postID,
+		"groupId": groupID,
+		"comment": comment,
+	}
+
+	message := &websocket.Message{
+		Type:    "group_post_comment",
+		Content: newCommentEvent,
+	}
+
+	messageData, _ := json.Marshal(message)
+
+	// Broadcast to group members
+	h.Hub.Broadcast <- &websocket.Broadcast{
+		RoomID:  "group_" + groupID,
+		Message: messageData,
+		Sender:  nil,
+	}
+
+	utils.RespondWithSuccess(w, http.StatusCreated, "Comment added successfully", map[string]interface{}{
+		"comment": comment,
+	})
+}
+
+// DeleteGroupPostComment handles deleting a comment from a group post
+func (h *Handler) DeleteGroupPostComment(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID, post ID, and comment ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["groupId"]
+	postID := vars["postId"]
+	commentID := vars["commentId"]
+
+	// Check if user is a member of the group
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "Not a member of this group")
+		return
+	}
+
+	// Check if group post exists
+	post, err := h.GroupPostService.GetByID(postID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Verify post belongs to the group
+	if post.GroupID != groupID {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found in this group")
+		return
+	}
+
+	// Get comment to check ownership
+	comment, err := h.CommentService.GetByID(commentID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Comment not found")
+		return
+	}
+
+	// Check if user can delete the comment (comment owner or post owner)
+	if comment.UserID != userID && post.UserID != userID {
+		utils.RespondWithError(w, http.StatusForbidden, "Not authorized to delete this comment")
+		return
+	}
+
+	// Delete comment
+	if err := h.CommentService.Delete(commentID, userID); err != nil {
+		if err.Error() == "comment not found or not authorized to delete" {
+			utils.RespondWithError(w, http.StatusForbidden, "Not authorized to delete this comment")
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete comment")
+		}
+		return
+	}
+
+	// Broadcast comment deletion event via WebSocket
+	deleteCommentEvent := map[string]interface{}{
+		"postId":    postID,
+		"groupId":   groupID,
+		"commentId": commentID,
+	}
+
+	message := &websocket.Message{
+		Type:    "group_post_comment_delete",
+		Content: deleteCommentEvent,
+	}
+
+	messageData, _ := json.Marshal(message)
+
+	// Broadcast to group members
+	h.Hub.Broadcast <- &websocket.Broadcast{
+		RoomID:  "group_" + groupID,
+		Message: messageData,
+		Sender:  nil,
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Comment deleted successfully", nil)
+}
+
 // GetGroupMessages handles retrieving messages for a group
 func (h *Handler) GetGroupMessages(w http.ResponseWriter, r *http.Request) {
 	// Get group ID from URL
