@@ -169,7 +169,7 @@ export const groupAPI = {
   approveJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/approve-request`, { userId }),
   rejectJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/reject-request`, { userId }),
   inviteToGroup: (groupId, userId) => api.post(`/groups/${groupId}/invite`, { userId }),
-  respondToInvitation: (invitationId, accept) => api.post(`/groups/invitations/${invitationId}/respond`, { accept }),
+  respondToGroupInvitation: (notificationId, accept) => api.post(`/groups/invitations/${notificationId}/respond`, { accept }),
   getGroupPosts: (groupId) => api.get(`/groups/${groupId}/posts`),
   createGroupPost: (groupId, postData) => {
     // For FormData, don't set Content-Type header - let browser set it with boundary
