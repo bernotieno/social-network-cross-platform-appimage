@@ -24,6 +24,7 @@ const (
 	GroupMemberStatusPending  GroupMemberStatus = "pending"
 	GroupMemberStatusAccepted GroupMemberStatus = "accepted"
 	GroupMemberStatusRejected GroupMemberStatus = "rejected"
+	GroupMemberStatusInvited  GroupMemberStatus = "invited"
 )
 
 // GroupMember represents a member of a group
@@ -218,6 +219,42 @@ func (s *GroupMemberService) GetPendingRequests(groupID string) ([]*GroupMember,
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating pending requests: %w", err)
+	}
+
+	return members, nil
+}
+
+// GetInvitedUsers retrieves users who have been invited to a group but haven't responded yet
+func (s *GroupMemberService) GetInvitedUsers(groupID string) ([]*GroupMember, error) {
+	rows, err := s.DB.Query(`
+		SELECT gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.created_at, gm.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture
+		FROM group_members gm
+		JOIN users u ON gm.user_id = u.id
+		WHERE gm.group_id = ? AND gm.status = 'invited'
+		ORDER BY gm.created_at ASC
+	`, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get invited users: %w", err)
+	}
+	defer rows.Close()
+
+	var members []*GroupMember
+	for rows.Next() {
+		member := &GroupMember{User: &User{}}
+		err := rows.Scan(
+			&member.ID, &member.GroupID, &member.UserID, &member.Role, &member.Status, &member.CreatedAt, &member.UpdatedAt,
+			&member.User.ID, &member.User.Username, &member.User.FullName, &member.User.ProfilePicture,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan invited user: %w", err)
+		}
+
+		members = append(members, member)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating invited users: %w", err)
 	}
 
 	return members, nil
