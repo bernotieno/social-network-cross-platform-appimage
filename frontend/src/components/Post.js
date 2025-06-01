@@ -8,12 +8,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { postAPI } from '@/utils/api';
 import { getImageUrl } from '@/utils/images';
 import { subscribeToPostLikes, subscribeToNewComments, subscribeToCommentDeletions } from '@/utils/socket';
+import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import { ConfirmModal, AlertModal } from '@/components/Modal';
 import styles from '@/styles/Post.module.css';
 
 const Post = ({ post, onDelete, onUpdate }) => {
   const { user } = useAuth();
+  const { showSuccess } = useAlert();
   const [isLiked, setIsLiked] = useState(post.isLikedByCurrentUser || false);
   const [likesCount, setLikesCount] = useState(post.likesCount || 0);
   const [showComments, setShowComments] = useState(false);
