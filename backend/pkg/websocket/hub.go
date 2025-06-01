@@ -61,8 +61,13 @@ func (h *Hub) Run() {
 					}
 				}
 			}
-			// Close the client's send channel
-			close(client.Send)
+			// Close the client's send channel safely
+			select {
+			case <-client.Send:
+				// Channel is already closed
+			default:
+				close(client.Send)
+			}
 
 		case broadcast := <-h.Broadcast:
 			// Get the room
@@ -82,7 +87,12 @@ func (h *Hub) Run() {
 				case client.Send <- broadcast.Message:
 				default:
 					// Client's send buffer is full, remove them
-					close(client.Send)
+					select {
+					case <-client.Send:
+						// Channel is already closed
+					default:
+						close(client.Send)
+					}
 					delete(room, client)
 					// Delete the room if it's empty
 					if len(room) == 0 {
