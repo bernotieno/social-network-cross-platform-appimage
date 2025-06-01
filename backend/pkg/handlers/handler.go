@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -131,6 +132,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	// Parse request body
 	var req struct {
 		ReceiverID string `json:"receiverId"`
+		GroupID    string `json:"groupId"`
 		Content    string `json:"content"`
 	}
 
@@ -140,16 +142,51 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.ReceiverID == "" || req.Content == "" {
-		http.Error(w, "ReceiverID and content are required", http.StatusBadRequest)
+	if req.Content == "" {
+		http.Error(w, "Content is required", http.StatusBadRequest)
 		return
 	}
 
-	// Create message
-	message := &models.Message{
-		SenderID:   userID,
-		ReceiverID: req.ReceiverID,
-		Content:    req.Content,
+	// Validate that either receiverId or groupId is set, but not both
+	if (req.ReceiverID == "" && req.GroupID == "") || (req.ReceiverID != "" && req.GroupID != "") {
+		http.Error(w, "Either receiverId or groupId must be set, but not both", http.StatusBadRequest)
+		return
+	}
+
+	var roomID string
+	var message *models.Message
+
+	if req.ReceiverID != "" {
+		// Private message - validate follow relationship or public profile
+		if err := h.validatePrivateMessagePermission(userID, req.ReceiverID); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+
+		message = &models.Message{
+			SenderID:   userID,
+			ReceiverID: req.ReceiverID,
+			Content:    req.Content,
+		}
+		roomID = generateRoomID(userID, req.ReceiverID)
+	} else {
+		// Group message - validate group membership
+		isMember, err := h.GroupMemberService.IsGroupMember(req.GroupID, userID)
+		if err != nil {
+			http.Error(w, "Failed to check group membership", http.StatusInternalServerError)
+			return
+		}
+		if !isMember {
+			http.Error(w, "You must be a member of this group to send messages", http.StatusForbidden)
+			return
+		}
+
+		message = &models.Message{
+			SenderID: userID,
+			GroupID:  req.GroupID,
+			Content:  req.Content,
+		}
+		roomID = "group-" + req.GroupID
 	}
 
 	// Save to database
@@ -160,7 +197,6 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Also broadcast the message via WebSocket for real-time delivery
-	roomID := generateRoomID(userID, req.ReceiverID)
 	responseMsg := map[string]interface{}{
 		"roomId": roomID,
 		"message": map[string]interface{}{
@@ -228,6 +264,38 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		"success":  true,
 		"messages": messages,
 	})
+}
+
+// validatePrivateMessagePermission checks if a user can send a private message to another user
+func (h *Handler) validatePrivateMessagePermission(senderID, receiverID string) error {
+	// Get receiver's profile
+	receiver, err := h.UserService.GetByID(receiverID)
+	if err != nil {
+		return fmt.Errorf("user not found")
+	}
+
+	// If receiver has a public profile, allow messaging
+	if !receiver.IsPrivate {
+		return nil
+	}
+
+	// For private profiles, check if there's a follow relationship
+	// Either sender follows receiver OR receiver follows sender
+	senderFollowsReceiver, err := h.FollowService.IsFollowing(senderID, receiverID)
+	if err != nil {
+		return fmt.Errorf("failed to check follow relationship")
+	}
+
+	receiverFollowsSender, err := h.FollowService.IsFollowing(receiverID, senderID)
+	if err != nil {
+		return fmt.Errorf("failed to check follow relationship")
+	}
+
+	if !senderFollowsReceiver && !receiverFollowsSender {
+		return fmt.Errorf("you can only message users you follow or who follow you")
+	}
+
+	return nil
 }
 
 // generateRoomID creates a consistent room ID for two users
