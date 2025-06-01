@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import useNotifications from '@/hooks/useNotifications';
+import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import styles from '@/styles/Notifications.module.css';
@@ -226,16 +227,23 @@ export default function Notifications() {
                 <Link href={`/profile/${notification.sender.id}`} className={styles.notificationSender}>
                   {notification.sender.profilePicture ? (
                     <Image
-                      src={notification.sender.profilePicture}
+                      src={getUserProfilePictureUrl(notification.sender)}
+                      alt={notification.sender.username}
+                      width={50}
+                      height={50}
+                      className={styles.senderAvatar}
+                      onError={(e) => {
+                        e.target.src = getFallbackAvatar(notification.sender);
+                      }}
+                    />
+                  ) : (
+                    <Image
+                      src={getFallbackAvatar(notification.sender)}
                       alt={notification.sender.username}
                       width={50}
                       height={50}
                       className={styles.senderAvatar}
                     />
-                  ) : (
-                    <div className={styles.senderAvatarPlaceholder}>
-                      {notification.sender.username?.charAt(0).toUpperCase() || 'U'}
-                    </div>
                   )}
                 </Link>
 
