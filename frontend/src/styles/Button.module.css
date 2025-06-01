@@ -8,6 +8,8 @@
   justify-content: center;
   gap: 0.5rem;
   border: none;
+  flex-shrink: 0; /* Prevent button from shrinking */
+  white-space: nowrap; /* Prevent text wrapping */
 }
 
 /* Variants */
@@ -68,16 +70,19 @@
 .small {
   padding: 0.25rem 0.75rem;
   font-size: 0.875rem;
+  min-width: 60px; /* Minimum width for consistency */
 }
 
 .medium {
   padding: 0.5rem 1rem;
   font-size: 1rem;
+  min-width: 80px; /* Minimum width for consistency */
 }
 
 .large {
   padding: 0.75rem 1.5rem;
   font-size: 1.125rem;
+  min-width: 100px; /* Minimum width for consistency */
 }
 
 /* Full width */
