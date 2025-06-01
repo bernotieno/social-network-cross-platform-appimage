@@ -113,7 +113,30 @@
 }
 
 .tabContent {
-  min-height: 400px;
+  padding: 1.5rem;
+  height: 600px; /* Fixed height */
+  overflow-y: auto; /* Enable vertical scrolling */
+  overflow-x: hidden; /* Hide horizontal scrolling */
+  scroll-behavior: smooth; /* Smooth scrolling */
+}
+
+/* Custom scrollbar styling */
+.tabContent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tabContent::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.tabContent::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.tabContent::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .restrictedContent {
@@ -140,46 +163,51 @@
   .groupPageContainer {
     padding: 0;
   }
-  
+
   .coverPhoto {
     height: 200px;
   }
-  
+
   .groupInfo {
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
   }
-  
+
   .groupName {
     font-size: 1.5rem;
   }
-  
+
   .groupMeta {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .groupActions {
     width: 100%;
     justify-content: stretch;
   }
-  
+
   .groupActions button {
     flex: 1;
   }
-  
+
   .tabNavigation {
     margin: 0 1rem 1rem;
   }
-  
+
   .tabButton {
     padding: 0.75rem 1rem;
     font-size: 0.9rem;
   }
-  
+
   .restrictedContent {
     margin: 0 1rem;
     padding: 2rem 1rem;
+  }
+
+  .tabContent {
+    height: 500px; /* Smaller height for mobile */
+    padding: 1rem;
   }
 }
