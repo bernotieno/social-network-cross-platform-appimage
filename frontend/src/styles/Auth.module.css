@@ -53,8 +53,96 @@
   text-decoration: underline;
 }
 
+/* Name row for side-by-side first and last name */
+.nameRow {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.nameRow > div {
+  flex: 1;
+}
+
+/* Form group for custom elements */
+.formGroup {
+  margin-bottom: 1rem;
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #050505;
+}
+
+/* Textarea styling */
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid #dddfe2;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #050505;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #1877f2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+/* File input styling */
+.fileInput {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid #dddfe2;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #050505;
+  cursor: pointer;
+}
+
+.fileInput:focus {
+  outline: none;
+  border-color: #1877f2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+/* Avatar preview */
+.avatarPreview {
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.previewImage {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #dddfe2;
+}
+
+/* Error message */
+.errorMessage {
+  color: #e41e3f;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
 @media (max-width: 576px) {
   .authCard {
     padding: 1.5rem;
+  }
+
+  .nameRow {
+    flex-direction: column;
+    gap: 0;
   }
 }
