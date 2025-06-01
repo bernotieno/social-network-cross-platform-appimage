@@ -1,0 +1,228 @@
+.createGroupContainer {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.createGroupCard {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.header {
+  padding: 2rem 2rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1877f2;
+  margin: 0 0 0.5rem;
+}
+
+.subtitle {
+  color: #65676b;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.form {
+  padding: 2rem;
+}
+
+.coverPhotoSection {
+  margin-bottom: 1.5rem;
+}
+
+.coverPhotoContainer {
+  position: relative;
+  margin-top: 0.5rem;
+}
+
+.coverPhotoPreview {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.removeCoverPhoto {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.coverPhotoPlaceholder {
+  width: 100%;
+  height: 200px;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #65676b;
+  margin-bottom: 1rem;
+}
+
+.uploadIcon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.fileInput {
+  display: none;
+}
+
+.fileInputLabel {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: #f0f2f5;
+  color: #1877f2;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.fileInputLabel:hover {
+  background-color: #e4e6ea;
+}
+
+.inputGroup {
+  margin-bottom: 1.5rem;
+}
+
+.label {
+  display: block;
+  font-weight: 600;
+  color: #1c1e21;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.input, .textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.input:focus, .textarea:focus {
+  outline: none;
+  border-color: #1877f2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.charCount {
+  text-align: right;
+  font-size: 0.8rem;
+  color: #65676b;
+  margin-top: 0.25rem;
+}
+
+.privacyOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.radioOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radioOption:hover {
+  border-color: #1877f2;
+  background-color: #f8f9fa;
+}
+
+.radioOption input[type="radio"] {
+  margin-top: 0.25rem;
+}
+
+.radioContent {
+  flex: 1;
+}
+
+.radioTitle {
+  font-weight: 600;
+  color: #1c1e21;
+  margin-bottom: 0.25rem;
+}
+
+.radioDescription {
+  font-size: 0.9rem;
+  color: #65676b;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f0f2f5;
+}
+
+@media (max-width: 768px) {
+  .createGroupContainer {
+    padding: 1rem;
+  }
+  
+  .form {
+    padding: 1.5rem;
+  }
+  
+  .header {
+    padding: 1.5rem 1.5rem 1rem;
+  }
+  
+  .actions {
+    flex-direction: column-reverse;
+  }
+  
+  .actions button {
+    width: 100%;
+  }
+  
+  .coverPhotoPlaceholder {
+    height: 150px;
+  }
+  
+  .coverPhotoPreview {
+    height: 150px;
+  }
+}
