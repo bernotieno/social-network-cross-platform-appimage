@@ -1,7 +1,7 @@
 .groupPostsContainer {
   max-width: 800px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0;
 }
 
 .loading {
@@ -210,9 +210,6 @@
 }
 
 @media (max-width: 768px) {
-  .groupPostsContainer {
-    padding: 0;
-  }
 
   .createPostPrompt {
     padding: 0.75rem;
