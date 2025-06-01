@@ -12,12 +12,15 @@ import {
   sendMessage,
   subscribeToMessages
 } from '@/utils/socket';
+import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
+import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import styles from '@/styles/Chat.module.css';
 
 export default function Chat() {
   const { user } = useAuth();
+  const { showError } = useAlert();
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -75,7 +78,7 @@ export default function Chat() {
 
         // Get user's following list as contacts
         const response = await userAPI.getFollowing(user?.id);
-        setContacts(response.data.data.following || []);
+        setContacts(response.data.following || []);
       } catch (error) {
         console.error('Error fetching contacts:', error);
       } finally {
@@ -200,6 +203,11 @@ export default function Chat() {
     }
   };
 
+  // Handle emoji insertion
+  const insertEmoji = (emoji) => {
+    setNewMessage(prev => prev + emoji);
+  };
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
 
@@ -227,7 +235,7 @@ export default function Chat() {
       // Restore the message content to the input on error
       setNewMessage(messageContent);
       // Show error to user
-      alert('Failed to send message. Please try again.');
+      showError('Failed to send message. Please try again.');
     }
   };
 
@@ -260,16 +268,23 @@ export default function Chat() {
                 >
                   {contact.profilePicture ? (
                     <Image
-                      src={contact.profilePicture}
+                      src={getUserProfilePictureUrl(contact)}
+                      alt={contact.username}
+                      width={40}
+                      height={40}
+                      className={styles.contactAvatar}
+                      onError={(e) => {
+                        e.target.src = getFallbackAvatar(contact);
+                      }}
+                    />
+                  ) : (
+                    <Image
+                      src={getFallbackAvatar(contact)}
                       alt={contact.username}
                       width={40}
                       height={40}
                       className={styles.contactAvatar}
                     />
-                  ) : (
-                    <div className={styles.contactAvatarPlaceholder}>
-                      {contact.username?.charAt(0).toUpperCase() || 'U'}
-                    </div>
                   )}
 
                   <div className={styles.contactInfo}>
@@ -293,16 +308,23 @@ export default function Chat() {
                 <div className={styles.chatHeaderInfo}>
                   {selectedContact.profilePicture ? (
                     <Image
-                      src={selectedContact.profilePicture}
+                      src={getUserProfilePictureUrl(selectedContact)}
+                      alt={selectedContact.username}
+                      width={40}
+                      height={40}
+                      className={styles.headerAvatar}
+                      onError={(e) => {
+                        e.target.src = getFallbackAvatar(selectedContact);
+                      }}
+                    />
+                  ) : (
+                    <Image
+                      src={getFallbackAvatar(selectedContact)}
                       alt={selectedContact.username}
                       width={40}
                       height={40}
                       className={styles.headerAvatar}
                     />
-                  ) : (
-                    <div className={styles.headerAvatarPlaceholder}>
-                      {selectedContact.username?.charAt(0).toUpperCase() || 'U'}
-                    </div>
                   )}
 
                   <div>
@@ -339,20 +361,34 @@ export default function Chat() {
               </div>
 
               <form onSubmit={handleSendMessage} className={styles.messageForm}>
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  className={styles.messageInput}
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={!newMessage.trim()}
-                >
-                  Send
-                </Button>
+                <div className={styles.emojiBar}>
+                  {['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💯'].map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={styles.emojiButton}
+                      onClick={() => insertEmoji(emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.inputContainer}>
+                  <input
+                    type="text"
+                    placeholder="Type a message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    className={styles.messageInput}
+                  />
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={!newMessage.trim()}
+                  >
+                    Send
+                  </Button>
+                </div>
               </form>
             </>
           )}
