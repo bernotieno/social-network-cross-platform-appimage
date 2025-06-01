@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
-import { postAPI } from '@/utils/api';
+import { postAPI, groupAPI } from '@/utils/api';
 import { getImageUrl } from '@/utils/images';
 import { subscribeToPostLikes, subscribeToNewComments, subscribeToCommentDeletions } from '@/utils/socket';
 import { useAlert } from '@/contexts/AlertContext';
@@ -13,7 +13,7 @@ import Button from '@/components/Button';
 import { ConfirmModal, AlertModal } from '@/components/Modal';
 import styles from '@/styles/Post.module.css';
 
-const Post = ({ post, onDelete, onUpdate }) => {
+const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null }) => {
   const { user } = useAuth();
   const { showSuccess } = useAlert();
   const [isLiked, setIsLiked] = useState(post.isLikedByCurrentUser || false);
@@ -38,14 +38,28 @@ const Post = ({ post, onDelete, onUpdate }) => {
 
   const handleLikeToggle = async () => {
     try {
-      if (isLiked) {
-        await postAPI.unlikePost(post.id);
-        setIsLiked(false);
-        setLikesCount(prev => prev - 1);
+      if (isGroupPost && groupId) {
+        // Use group post API
+        if (isLiked) {
+          await groupAPI.unlikeGroupPost(groupId, post.id);
+          setIsLiked(false);
+          setLikesCount(prev => prev - 1);
+        } else {
+          await groupAPI.likeGroupPost(groupId, post.id);
+          setIsLiked(true);
+          setLikesCount(prev => prev + 1);
+        }
       } else {
-        await postAPI.likePost(post.id);
-        setIsLiked(true);
-        setLikesCount(prev => prev + 1);
+        // Use regular post API
+        if (isLiked) {
+          await postAPI.unlikePost(post.id);
+          setIsLiked(false);
+          setLikesCount(prev => prev - 1);
+        } else {
+          await postAPI.likePost(post.id);
+          setIsLiked(true);
+          setLikesCount(prev => prev + 1);
+        }
       }
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -57,7 +71,12 @@ const Post = ({ post, onDelete, onUpdate }) => {
       console.log(showComments)
       // Always fetch fresh comments when opening the comments section
       try {
-        const response = await postAPI.getComments(post.id);
+        let response;
+        if (isGroupPost && groupId) {
+          response = await groupAPI.getGroupPostComments(groupId, post.id);
+        } else {
+          response = await postAPI.getComments(post.id);
+        }
         console.log(">>>>", response)
         setComments(response.data.data.comments || []);
         console.log(response.data.data.comments)
@@ -77,8 +96,13 @@ const Post = ({ post, onDelete, onUpdate }) => {
 
     try {
       setIsSubmittingComment(true);
-      const response = await postAPI.addComment(post.id, newComment);
-      setComments(prev => [...prev, response.data.comment]);
+      let response;
+      if (isGroupPost && groupId) {
+        response = await groupAPI.addGroupPostComment(groupId, post.id, newComment);
+      } else {
+        response = await postAPI.addComment(post.id, newComment);
+      }
+      setComments(prev => [response.data.data.comment, ...prev]);
       setNewComment('');
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -89,7 +113,11 @@ const Post = ({ post, onDelete, onUpdate }) => {
 
   const handleDeleteComment = async (commentId) => {
     try {
-      await postAPI.deleteComment(post.id, commentId);
+      if (isGroupPost && groupId) {
+        await groupAPI.deleteGroupPostComment(groupId, post.id, commentId);
+      } else {
+        await postAPI.deleteComment(post.id, commentId);
+      }
       setComments(prev => prev.filter(comment => comment.id !== commentId));
     } catch (error) {
       console.error('Error deleting comment:', error);
