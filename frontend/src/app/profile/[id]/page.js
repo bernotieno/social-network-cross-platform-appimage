@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { userAPI, postAPI } from '@/utils/api';
@@ -29,7 +28,10 @@ export default function ProfilePage() {
   const [followingCount, setFollowingCount] = useState(0);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({
+    username: '',
+    email: '',
     fullName: '',
+    dateOfBirth: '',
     bio: '',
     isPrivate: false
   });
@@ -49,7 +51,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (profile && profile.user) {
       setEditFormData({
+        username: profile.user.username || '',
+        email: profile.user.email || '',
         fullName: profile.user.fullName || '',
+        dateOfBirth: profile.user.dateOfBirth ? new Date(profile.user.dateOfBirth).toISOString().split('T')[0] : '',
         bio: profile.user.bio || '',
         isPrivate: profile.user.isPrivate || false
       });
@@ -283,6 +288,28 @@ export default function ProfilePage() {
     setIsSubmitting(true);
 
     try {
+      // Client-side validation
+      if (editFormData.username.trim().length < 3) {
+        setUpdateMessage({ type: 'error', text: 'Username must be at least 3 characters long.' });
+        setTimeout(() => setUpdateMessage(null), 5000);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!editFormData.email.includes('@') || !editFormData.email.includes('.')) {
+        setUpdateMessage({ type: 'error', text: 'Please enter a valid email address.' });
+        setTimeout(() => setUpdateMessage(null), 5000);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (editFormData.dateOfBirth && new Date(editFormData.dateOfBirth) > new Date()) {
+        setUpdateMessage({ type: 'error', text: 'Date of birth cannot be in the future.' });
+        setTimeout(() => setUpdateMessage(null), 5000);
+        setIsSubmitting(false);
+        return;
+      }
+
       // Update profile data
       const response = await userAPI.updateProfile(editFormData);
       console.log('Profile update response:', response);
@@ -330,8 +357,18 @@ export default function ProfilePage() {
 
     } catch (error) {
       console.error('Error updating profile:', error);
-      // Show error message to user
-      setUpdateMessage({ type: 'error', text: 'Failed to update profile. Please try again.' });
+      // Show specific error message from backend or generic message
+      let errorMessage = 'Failed to update profile. Please try again.';
+
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response && error.response.status === 409) {
+        errorMessage = 'Username or email is already taken.';
+      } else if (error.response && error.response.status === 400) {
+        errorMessage = 'Invalid data provided. Please check your inputs.';
+      }
+
+      setUpdateMessage({ type: 'error', text: errorMessage });
       setTimeout(() => setUpdateMessage(null), 5000);
     } finally {
       setIsSubmitting(false);
@@ -431,11 +468,19 @@ export default function ProfilePage() {
             </div>
 
             <div className={styles.profileDetails}>
-              <h1 className={styles.profileName}>{profile.user.fullName}</h1>
+              <h1 className={styles.profileName}>
+                {profile.user.fullName || `${profile.user.firstName || ''} ${profile.user.lastName || ''}`.trim() || profile.user.username}
+              </h1>
               <p className={styles.profileUsername}>@{profile.user.username}</p>
 
               {profile.user.bio && (
                 <p className={styles.profileBio}>{profile.user.bio}</p>
+              )}
+
+              {profile.user.dateOfBirth && (
+                <p className={styles.profileBirthdate}>
+                  Born: {new Date(profile.user.dateOfBirth).toLocaleDateString()}
+                </p>
               )}
 
               <div className={styles.profileStats}>
@@ -599,6 +644,35 @@ export default function ProfilePage() {
             <h2>Edit Profile</h2>
             <form onSubmit={handleSubmitEdit}>
               <div className={styles.formGroup}>
+                <label htmlFor="username">Username</label>
+                <input
+                  type="text"
+                  id="username"
+                  name="username"
+                  value={editFormData.username}
+                  onChange={handleEditFormChange}
+                  className={styles.input}
+                  required
+                  minLength={3}
+                  placeholder="Enter your username"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={editFormData.email}
+                  onChange={handleEditFormChange}
+                  className={styles.input}
+                  required
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
                 <label htmlFor="fullName">Full Name</label>
                 <input
                   type="text"
@@ -607,6 +681,20 @@ export default function ProfilePage() {
                   value={editFormData.fullName}
                   onChange={handleEditFormChange}
                   className={styles.input}
+                  placeholder="Enter your full name"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="dateOfBirth">Date of Birth</label>
+                <input
+                  type="date"
+                  id="dateOfBirth"
+                  name="dateOfBirth"
+                  value={editFormData.dateOfBirth}
+                  onChange={handleEditFormChange}
+                  className={styles.input}
+                  max={new Date().toISOString().split('T')[0]} // Prevent future dates
                 />
               </div>
 
