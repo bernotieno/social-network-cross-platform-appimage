@@ -1,7 +1,7 @@
 .groupEventsContainer {
   max-width: 800px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0;
 }
 
 .loading {
@@ -220,53 +220,50 @@
 }
 
 @media (max-width: 768px) {
-  .groupEventsContainer {
-    padding: 0;
-  }
-  
+
   .createEventForm {
     padding: 1rem;
     margin: 0 0 1rem;
     border-radius: 0;
   }
-  
+
   .dateTimeRow {
     grid-template-columns: 1fr;
   }
-  
+
   .formActions {
     flex-direction: column-reverse;
   }
-  
+
   .formActions button {
     width: 100%;
   }
-  
+
   .eventCard {
     margin: 0;
     border-radius: 0;
     border-left: none;
     border-right: none;
   }
-  
+
   .eventHeader {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .eventMeta {
     gap: 0.5rem;
   }
-  
+
   .eventStats {
     gap: 1rem;
     padding: 0.75rem;
   }
-  
+
   .eventActions {
     justify-content: stretch;
   }
-  
+
   .eventActions button {
     flex: 1;
   }
