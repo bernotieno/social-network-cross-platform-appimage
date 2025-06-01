@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bernaotieno/social-network/backend/pkg/auth"
 	"github.com/bernaotieno/social-network/backend/pkg/middleware"
@@ -14,10 +15,14 @@ import (
 
 // RegisterRequest represents a user registration request
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	FullName string `json:"fullName"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	FullName    string `json:"fullName"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	DateOfBirth string `json:"dateOfBirth"` // Will be parsed to time.Time
+	Bio         string `json:"bio"`
 }
 
 // LoginRequest represents a user login request
@@ -28,17 +33,28 @@ type LoginRequest struct {
 
 // Register handles user registration
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	// Parse request body
-	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+	// Parse multipart form (for avatar upload support)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Failed to parse form")
 		return
+	}
+
+	// Extract form values
+	req := RegisterRequest{
+		Username:    r.FormValue("username"),
+		Email:       r.FormValue("email"),
+		Password:    r.FormValue("password"),
+		FullName:    r.FormValue("fullName"),
+		FirstName:   r.FormValue("firstName"),
+		LastName:    r.FormValue("lastName"),
+		DateOfBirth: r.FormValue("dateOfBirth"),
+		Bio:         r.FormValue("bio"),
 	}
 	log.Println("register request:", req)
 
-	// Validate request
-	if req.Username == "" || req.Email == "" || req.Password == "" || req.FullName == "" {
-		utils.RespondWithError(w, http.StatusBadRequest, "All fields are required")
+	// Validate request - only required fields
+	if req.Username == "" || req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" || req.DateOfBirth == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "Username, email, password, first name, last name, and date of birth are required")
 		return
 	}
 
@@ -66,14 +82,54 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
+	// Parse date of birth
+	var dateOfBirth *time.Time
+	if req.DateOfBirth != "" {
+		if parsedDate, err := time.Parse("2006-01-02", req.DateOfBirth); err == nil {
+			dateOfBirth = &parsedDate
+		} else {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid date of birth format. Use YYYY-MM-DD")
+			return
+		}
+	}
+
+	// Handle avatar upload if provided
+	var avatarPath string
+	file, header, err := r.FormFile("avatar")
+	if err == nil {
+		defer file.Close()
+
+		// Save avatar image
+		avatarPath, err = utils.SaveImage(file, header, "avatars")
+		if err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Failed to save avatar: "+err.Error())
+			return
+		}
+	}
+
+	// Generate fullName from firstName and lastName
+	fullName := req.FullName
+	if fullName == "" {
+		fullName = strings.TrimSpace(req.FirstName + " " + req.LastName)
+	}
+
+	// Create user with all fields
 	user := &models.User{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
-		FullName: req.FullName,
+		Username:       req.Username,
+		Email:          req.Email,
+		Password:       req.Password,
+		FullName:       fullName,
+		FirstName:      req.FirstName,
+		LastName:       req.LastName,
+		DateOfBirth:    dateOfBirth,
+		Bio:            req.Bio,
+		ProfilePicture: avatarPath,
 	}
 	if err := h.UserService.Create(user); err != nil {
+		// If user creation fails and we uploaded an avatar, clean it up
+		if avatarPath != "" {
+			utils.DeleteImage(avatarPath)
+		}
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
