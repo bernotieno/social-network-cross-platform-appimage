@@ -42,7 +42,17 @@ api.interceptors.response.use(
 // Auth API calls
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
-  register: (userData) => api.post('/auth/register', userData),
+  register: (userData) => {
+    // Check if userData is FormData (for avatar upload) or regular object
+    const isFormData = userData instanceof FormData;
+    return api.post('/auth/register', userData, {
+      headers: isFormData ? {
+        'Content-Type': 'multipart/form-data',
+      } : {
+        'Content-Type': 'application/json',
+      },
+    });
+  },
   logout: () => api.post('/auth/logout'),
 };
 
@@ -100,6 +110,7 @@ export const userAPI = {
   getFollowRequests: () => api.get('/users/follow-requests'),
   respondToFollowRequest: (requestId, accept) =>
     api.put(`/users/follow-requests/${requestId}`, { accept }),
+  searchUsers: (query) => api.get(`/users/search?q=${encodeURIComponent(query)}`),
 };
 
 // Post API calls
@@ -134,11 +145,31 @@ export const postAPI = {
 export const groupAPI = {
   getGroups: () => api.get('/groups'),
   getGroup: (groupId) => api.get(`/groups/${groupId}`),
-  createGroup: (groupData) => api.post('/groups', groupData),
-  updateGroup: (groupId, groupData) => api.put(`/groups/${groupId}`, groupData),
+  createGroup: (groupData) => {
+    // For FormData, don't set Content-Type header - let browser set it with boundary
+    return api.post('/groups', groupData, {
+      headers: {
+        'Content-Type': undefined, // This removes the default application/json header
+      },
+    });
+  },
+  updateGroup: (groupId, groupData) => {
+    // For FormData, don't set Content-Type header - let browser set it with boundary
+    return api.put(`/groups/${groupId}`, groupData, {
+      headers: {
+        'Content-Type': undefined, // This removes the default application/json header
+      },
+    });
+  },
   deleteGroup: (groupId) => api.delete(`/groups/${groupId}`),
   joinGroup: (groupId) => api.post(`/groups/${groupId}/join`),
   leaveGroup: (groupId) => api.delete(`/groups/${groupId}/join`),
+  getGroupMembers: (groupId) => api.get(`/groups/${groupId}/members`),
+  getGroupPendingRequests: (groupId) => api.get(`/groups/${groupId}/pending-requests`),
+  approveJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/approve-request`, { userId }),
+  rejectJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/reject-request`, { userId }),
+  inviteToGroup: (groupId, userId) => api.post(`/groups/${groupId}/invite`, { userId }),
+  respondToInvitation: (invitationId, accept) => api.post(`/groups/invitations/${invitationId}/respond`, { accept }),
   getGroupPosts: (groupId) => api.get(`/groups/${groupId}/posts`),
   createGroupPost: (groupId, postData) => {
     // For FormData, don't set Content-Type header - let browser set it with boundary
@@ -151,6 +182,8 @@ export const groupAPI = {
   createGroupEvent: (groupId, eventData) => api.post(`/groups/${groupId}/events`, eventData),
   getGroupEvents: (groupId) => api.get(`/groups/${groupId}/events`),
   respondToEvent: (eventId, response) => api.post(`/groups/events/${eventId}/respond`, { response }),
+  getGroupMessages: (groupId) => api.get(`/groups/${groupId}/messages`),
+  sendGroupMessage: (groupId, content) => api.post(`/groups/${groupId}/messages`, { content }),
 };
 
 // Notification API calls
@@ -163,6 +196,7 @@ export const notificationAPI = {
 // Message API calls
 export const messageAPI = {
   sendMessage: (receiverId, content) => api.post('/messages', { receiverId, content }),
+  sendGroupMessage: (groupId, content) => api.post('/messages', { groupId, content }),
   getMessages: (userId) => api.get(`/messages/${userId}`),
 };
 
