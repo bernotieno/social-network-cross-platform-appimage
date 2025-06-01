@@ -183,8 +183,10 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	// Notification routes
 	notifications := api.PathPrefix("/notifications").Subrouter()
 	notifications.HandleFunc("", middleware.AuthMiddleware(h.GetNotifications)).Methods("GET")
-	notifications.HandleFunc("/{id}/read", middleware.AuthMiddleware(h.MarkNotificationAsRead)).Methods("PUT")
 	notifications.HandleFunc("/read-all", middleware.AuthMiddleware(h.MarkAllNotificationsAsRead)).Methods("PUT")
+	notifications.HandleFunc("/delete-all", middleware.AuthMiddleware(h.DeleteAllNotifications)).Methods("DELETE")
+	notifications.HandleFunc("/{id}/read", middleware.AuthMiddleware(h.MarkNotificationAsRead)).Methods("PUT")
+	notifications.HandleFunc("/{id}", middleware.AuthMiddleware(h.DeleteNotification)).Methods("DELETE")
 
 	// Message routes
 	messages := api.PathPrefix("/messages").Subrouter()
