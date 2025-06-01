@@ -136,15 +136,10 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
       // Remove from search results
       setSearchResults(prev => prev.filter(user => user.id !== userId));
 
-      // Refresh members list to show the newly invited user
-      await fetchMembers();
+      // Note: We don't refresh members list since invited users are not members yet
+      // They will only become members after accepting the invitation
 
-      // Refresh group data to update membership status
-      if (onMembershipChange) {
-        await onMembershipChange();
-      }
-
-      showSuccess('User invited successfully!');
+      showSuccess('Invitation sent successfully! The user will receive a notification.');
     } catch (error) {
       console.error('Error inviting user:', error);
       showError(error.response?.data?.message || 'Failed to send invitation. Please try again.');
