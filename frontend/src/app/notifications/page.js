@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import useNotifications from '@/hooks/useNotifications';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
+import { groupAPI } from '@/utils/api';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import styles from '@/styles/Notifications.module.css';
@@ -169,9 +170,20 @@ export default function Notifications() {
     markAsRead(notificationId);
   };
 
-  const handleGroupInviteResponse = (notificationId, accept) => {
-    console.log(`Group invite ${accept ? 'accepted' : 'declined'}: ${notificationId}`);
-    markAsRead(notificationId);
+  const handleGroupInviteResponse = async (notificationId, accept) => {
+    try {
+      await groupAPI.respondToGroupInvitation(notificationId, accept);
+
+      // Mark notification as read and refresh notifications
+      markAsRead(notificationId);
+      fetchNotifications();
+
+      // Show success message
+      console.log(`Group invite ${accept ? 'accepted' : 'declined'} successfully`);
+    } catch (error) {
+      console.error('Error responding to group invitation:', error);
+      // You might want to show an error message to the user here
+    }
   };
 
   const handleGroupJoinResponse = (notificationId, accept) => {
