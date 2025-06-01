@@ -12,17 +12,20 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID             string    `json:"id"`
-	Username       string    `json:"username"`
-	Email          string    `json:"email"`
-	Password       string    `json:"-"` // Never expose password in JSON
-	FullName       string    `json:"fullName"`
-	Bio            string    `json:"bio,omitempty"`
-	ProfilePicture string    `json:"profilePicture,omitempty"`
-	CoverPhoto     string    `json:"coverPhoto,omitempty"`
-	IsPrivate      bool      `json:"isPrivate"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             string     `json:"id"`
+	Username       string     `json:"username"`
+	Email          string     `json:"email"`
+	Password       string     `json:"-"` // Never expose password in JSON
+	FullName       string     `json:"fullName"`
+	FirstName      string     `json:"firstName"`
+	LastName       string     `json:"lastName"`
+	DateOfBirth    *time.Time `json:"dateOfBirth,omitempty"`
+	Bio            string     `json:"bio,omitempty"`
+	ProfilePicture string     `json:"profilePicture,omitempty"`
+	CoverPhoto     string     `json:"coverPhoto,omitempty"`
+	IsPrivate      bool       `json:"isPrivate"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 // UserService handles user-related operations
@@ -53,10 +56,9 @@ func (s *UserService) Create(user *User) error {
 
 	// Insert user into database
 	_, err = s.DB.Exec(`
-		INSERT INTO users (id, username, email, password, full_name, bio, profile_picture, cover_photo, is_private, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, user.ID, user.Username, user.Email, string(hashedPassword), user.FullName, user.Bio, user.ProfilePicture, user.CoverPhoto, user.IsPrivate, user.CreatedAt, user.UpdatedAt)
-
+		INSERT INTO users (id, username, email, password, full_name, first_name, last_name, date_of_birth, bio, profile_picture, cover_photo, is_private, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, user.ID, user.Username, user.Email, string(hashedPassword), user.FullName, user.FirstName, user.LastName, user.DateOfBirth, user.Bio, user.ProfilePicture, user.CoverPhoto, user.IsPrivate, user.CreatedAt, user.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -68,11 +70,10 @@ func (s *UserService) Create(user *User) error {
 func (s *UserService) GetByID(id string) (*User, error) {
 	user := &User{}
 	err := s.DB.QueryRow(`
-		SELECT id, username, email, password, full_name, bio, profile_picture, cover_photo, is_private, created_at, updated_at
+		SELECT id, username, email, password, full_name, first_name, last_name, date_of_birth, bio, profile_picture, cover_photo, is_private, created_at, updated_at
 		FROM users
 		WHERE id = ?
-	`, id).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
-
+	`, id).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.FirstName, &user.LastName, &user.DateOfBirth, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("user not found")
@@ -87,11 +88,10 @@ func (s *UserService) GetByID(id string) (*User, error) {
 func (s *UserService) GetByEmail(email string) (*User, error) {
 	user := &User{}
 	err := s.DB.QueryRow(`
-		SELECT id, username, email, password, full_name, bio, profile_picture, cover_photo, is_private, created_at, updated_at
+		SELECT id, username, email, password, full_name, first_name, last_name, date_of_birth, bio, profile_picture, cover_photo, is_private, created_at, updated_at
 		FROM users
 		WHERE email = ?
-	`, email).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
-
+	`, email).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.FirstName, &user.LastName, &user.DateOfBirth, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("user not found")
@@ -106,11 +106,10 @@ func (s *UserService) GetByEmail(email string) (*User, error) {
 func (s *UserService) GetByUsername(username string) (*User, error) {
 	user := &User{}
 	err := s.DB.QueryRow(`
-		SELECT id, username, email, password, full_name, bio, profile_picture, cover_photo, is_private, created_at, updated_at
+		SELECT id, username, email, password, full_name, first_name, last_name, date_of_birth, bio, profile_picture, cover_photo, is_private, created_at, updated_at
 		FROM users
 		WHERE username = ?
-	`, username).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
-
+	`, username).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.FirstName, &user.LastName, &user.DateOfBirth, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("user not found")
@@ -127,10 +126,9 @@ func (s *UserService) Update(user *User) error {
 
 	_, err := s.DB.Exec(`
 		UPDATE users
-		SET full_name = ?, bio = ?, profile_picture = ?, cover_photo = ?, is_private = ?, updated_at = ?
+		SET username = ?, email = ?, full_name = ?, first_name = ?, last_name = ?, date_of_birth = ?, bio = ?, profile_picture = ?, cover_photo = ?, is_private = ?, updated_at = ?
 		WHERE id = ?
-	`, user.FullName, user.Bio, user.ProfilePicture, user.CoverPhoto, user.IsPrivate, user.UpdatedAt, user.ID)
-
+	`, user.Username, user.Email, user.FullName, user.FirstName, user.LastName, user.DateOfBirth, user.Bio, user.ProfilePicture, user.CoverPhoto, user.IsPrivate, user.UpdatedAt, user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
@@ -152,7 +150,6 @@ func (s *UserService) UpdatePassword(userID, newPassword string) error {
 		SET password = ?, updated_at = ?
 		WHERE id = ?
 	`, string(hashedPassword), time.Now(), userID)
-
 	if err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
@@ -173,14 +170,14 @@ func (s *UserService) GetUsers(query string, limit, offset int) ([]*User, error)
 
 	if query != "" {
 		rows, err = s.DB.Query(`
-			SELECT id, username, email, password, full_name, bio, profile_picture, cover_photo, is_private, created_at, updated_at
+			SELECT id, username, email, password, full_name, first_name, last_name, date_of_birth, bio, profile_picture, cover_photo, is_private, created_at, updated_at
 			FROM users
-			WHERE username LIKE ? OR full_name LIKE ?
+			WHERE username LIKE ? OR full_name LIKE ? OR first_name LIKE ? OR last_name LIKE ?
 			LIMIT ? OFFSET ?
-		`, "%"+query+"%", "%"+query+"%", limit, offset)
+		`, "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", limit, offset)
 	} else {
 		rows, err = s.DB.Query(`
-			SELECT id, username, email, password, full_name, bio, profile_picture, cover_photo, is_private, created_at, updated_at
+			SELECT id, username, email, password, full_name, first_name, last_name, date_of_birth, bio, profile_picture, cover_photo, is_private, created_at, updated_at
 			FROM users
 			LIMIT ? OFFSET ?
 		`, limit, offset)
@@ -194,7 +191,7 @@ func (s *UserService) GetUsers(query string, limit, offset int) ([]*User, error)
 	var users []*User
 	for rows.Next() {
 		user := &User{}
-		err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.FullName, &user.FirstName, &user.LastName, &user.DateOfBirth, &user.Bio, &user.ProfilePicture, &user.CoverPhoto, &user.IsPrivate, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
@@ -214,7 +211,6 @@ func (s *UserService) UserExists(email, username string) (bool, error) {
 	err := s.DB.QueryRow(`
 		SELECT COUNT(*) FROM users WHERE email = ? OR username = ?
 	`, email, username).Scan(&count)
-
 	if err != nil {
 		return false, fmt.Errorf("failed to check if user exists: %w", err)
 	}
