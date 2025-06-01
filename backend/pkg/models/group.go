@@ -28,9 +28,9 @@ type Group struct {
 	CreatedAt   time.Time    `json:"createdAt"`
 	UpdatedAt   time.Time    `json:"updatedAt"`
 	// Additional fields for API responses
-	Creator      *User  `json:"creator,omitempty"`
-	MembersCount int    `json:"membersCount,omitempty"`
-	IsJoined     bool   `json:"isJoined,omitempty"`
+	Creator      *User `json:"creator,omitempty"`
+	MembersCount int   `json:"membersCount,omitempty"`
+	IsJoined     bool  `json:"isJoined"`
 }
 
 // GroupService handles group-related operations
@@ -54,7 +54,6 @@ func (s *GroupService) Create(group *Group) error {
 		INSERT INTO groups (id, name, description, creator_id, cover_photo, privacy, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, group.ID, group.Name, group.Description, group.CreatorID, group.CoverPhoto, group.Privacy, group.CreatedAt, group.UpdatedAt)
-
 	if err != nil {
 		return fmt.Errorf("failed to create group: %w", err)
 	}
@@ -68,17 +67,16 @@ func (s *GroupService) GetByID(id string, currentUserID string) (*Group, error) 
 	err := s.DB.QueryRow(`
 		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
-			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0 as is_joined
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') + 1 as members_count,
+			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		WHERE g.id = ?
-	`, currentUserID, id).Scan(
+	`, currentUserID, currentUserID, id).Scan(
 		&group.ID, &group.Name, &group.Description, &group.CreatorID, &group.CoverPhoto, &group.Privacy, &group.CreatedAt, &group.UpdatedAt,
 		&group.Creator.ID, &group.Creator.Username, &group.Creator.FullName, &group.Creator.ProfilePicture,
 		&group.MembersCount, &group.IsJoined,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("group not found")
@@ -103,7 +101,6 @@ func (s *GroupService) Update(group *Group) error {
 		SET name = ?, description = ?, cover_photo = ?, privacy = ?, updated_at = ?
 		WHERE id = ? AND creator_id = ?
 	`, group.Name, group.Description, group.CoverPhoto, group.Privacy, group.UpdatedAt, group.ID, group.CreatorID)
-
 	if err != nil {
 		return fmt.Errorf("failed to update group: %w", err)
 	}
@@ -145,8 +142,8 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 		rows, err = s.DB.Query(`
 			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0 as is_joined
+				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') + 1 as members_count,
+				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined
 			FROM groups g
 			JOIN users u ON g.creator_id = u.id
 			WHERE (g.name LIKE ? OR g.description LIKE ?) AND (g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
@@ -154,13 +151,13 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 			))
 			ORDER BY g.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, "%"+query+"%", "%"+query+"%", currentUserID, currentUserID, limit, offset)
+		`, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", currentUserID, currentUserID, limit, offset)
 	} else {
 		rows, err = s.DB.Query(`
 			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0 as is_joined
+				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') + 1 as members_count,
+				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined
 			FROM groups g
 			JOIN users u ON g.creator_id = u.id
 			WHERE g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
@@ -168,7 +165,7 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 			)
 			ORDER BY g.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, currentUserID, limit, offset)
+		`, currentUserID, currentUserID, currentUserID, currentUserID, limit, offset)
 	}
 
 	if err != nil {
@@ -211,7 +208,6 @@ func (s *GroupService) GetUserGroups(userID string, limit, offset int) ([]*Group
 		ORDER BY g.created_at DESC
 		LIMIT ? OFFSET ?
 	`, userID, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user groups: %w", err)
 	}
