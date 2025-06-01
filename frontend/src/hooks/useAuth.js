@@ -87,8 +87,12 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       setIsLoading(true);
+      console.log('Sending registration data:', userData);
       const response = await authAPI.register(userData);
-      const { token, user } = response.data;
+      console.log('Registration response:', response.data);
+
+      // Parse response data - backend returns data in response.data.data
+      const { token, user } = response.data.data;
 
       setAuth(token, user);
       setUser(user);
@@ -100,8 +104,9 @@ export const AuthProvider = ({ children }) => {
         console.warn('Failed to initialize WebSocket after registration:', error);
       }
 
-      return { success: true };
+      return { success: true, user };
     } catch (error) {
+      console.error('Registration error:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Registration failed'
