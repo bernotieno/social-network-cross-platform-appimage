@@ -155,6 +155,42 @@ const useNotifications = () => {
     }
   };
 
+  // Delete a specific notification
+  const deleteNotification = async (notificationId) => {
+    try {
+      await notificationAPI.deleteNotification(notificationId);
+
+      // Update local state
+      setNotifications(prev =>
+        prev.filter(notification => notification.id !== notificationId)
+      );
+
+      // Update unread count if the deleted notification was unread
+      setUnreadCount(prev => {
+        const deletedNotification = notifications.find(n => n.id === notificationId);
+        if (deletedNotification && !deletedNotification.readAt) {
+          return Math.max(0, prev - 1);
+        }
+        return prev;
+      });
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
+  };
+
+  // Delete all notifications
+  const deleteAllNotifications = async () => {
+    try {
+      await notificationAPI.deleteAllNotifications();
+
+      // Update local state
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+    }
+  };
+
   return {
     notifications,
     unreadCount,
@@ -163,6 +199,8 @@ const useNotifications = () => {
     fetchNotifications,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
+    deleteAllNotifications,
   };
 };
 
