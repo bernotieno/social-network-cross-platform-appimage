@@ -1,7 +1,7 @@
 .groupMembersContainer {
   max-width: 800px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0;
 }
 
 .loading {
@@ -290,49 +290,49 @@
   .groupMembersContainer {
     padding: 0;
   }
-  
+
   .tabNavigation {
     margin: 0 0 1rem;
     border-radius: 0;
   }
-  
+
   .tabButton {
     padding: 0.75rem 1rem;
     font-size: 0.9rem;
   }
-  
+
   .memberCard, .requestCard {
     margin: 0;
     border-radius: 0;
     border-left: none;
     border-right: none;
   }
-  
+
   .requestActions {
     flex-direction: column;
     gap: 0.25rem;
   }
-  
+
   .requestActions button {
     font-size: 0.8rem;
     padding: 0.25rem 0.5rem;
   }
-  
+
   .modal {
     margin: 0;
     border-radius: 0;
     height: 100vh;
     max-height: none;
   }
-  
+
   .modalHeader {
     padding: 1rem;
   }
-  
+
   .searchSection {
     padding: 1rem;
   }
-  
+
   .searchResultItem {
     padding: 1rem;
   }
