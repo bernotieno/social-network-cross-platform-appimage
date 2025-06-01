@@ -191,6 +191,8 @@ export const notificationAPI = {
   getNotifications: () => api.get('/notifications'),
   markAsRead: (notificationId) => api.put(`/notifications/${notificationId}/read`),
   markAllAsRead: () => api.put('/notifications/read-all'),
+  deleteNotification: (notificationId) => api.delete(`/notifications/${notificationId}`),
+  deleteAllNotifications: () => api.delete('/notifications/delete-all'),
 };
 
 // Message API calls
