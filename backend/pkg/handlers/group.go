@@ -983,19 +983,25 @@ func (h *Handler) InviteToGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if there's already a pending request
+	// Check if there's already a pending request or invitation
 	existingMember, err := h.GroupMemberService.GetByGroupAndUser(groupID, req.UserID)
-	if err == nil && existingMember.Status == models.GroupMemberStatusPending {
-		utils.RespondWithError(w, http.StatusConflict, "User already has a pending request for this group")
-		return
+	if err == nil {
+		if existingMember.Status == models.GroupMemberStatusPending {
+			utils.RespondWithError(w, http.StatusConflict, "User already has a pending request for this group")
+			return
+		}
+		if existingMember.Status == models.GroupMemberStatusInvited {
+			utils.RespondWithError(w, http.StatusConflict, "User already has a pending invitation for this group")
+			return
+		}
 	}
 
-	// Create group member with accepted status (invitation bypasses approval)
+	// Create group member with invited status (user needs to accept the invitation)
 	member := &models.GroupMember{
 		GroupID: groupID,
 		UserID:  req.UserID,
 		Role:    models.GroupMemberRoleMember,
-		Status:  models.GroupMemberStatusAccepted,
+		Status:  models.GroupMemberStatusInvited,
 	}
 
 	if err := h.GroupMemberService.Create(member); err != nil {
@@ -1025,6 +1031,91 @@ func (h *Handler) InviteToGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "User invited successfully", nil)
+}
+
+// RespondToGroupInvitation handles accepting or declining a group invitation
+func (h *Handler) RespondToGroupInvitation(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get notification ID from URL
+	vars := mux.Vars(r)
+	notificationID := vars["id"]
+
+	// Parse request body
+	var req struct {
+		Accept bool `json:"accept"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Get the notification to extract group information
+	notification, err := h.NotificationService.GetByID(notificationID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Notification not found")
+		return
+	}
+
+	// Verify this is a group invite notification for the current user
+	if notification.UserID != userID || notification.Type != models.NotificationTypeGroupInvite {
+		utils.RespondWithError(w, http.StatusForbidden, "Invalid notification")
+		return
+	}
+
+	// Parse group data from notification
+	var notificationData struct {
+		GroupID   string `json:"groupId"`
+		GroupName string `json:"groupName"`
+	}
+	if err := json.Unmarshal([]byte(notification.Data), &notificationData); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to parse notification data")
+		return
+	}
+
+	// Get the invitation record
+	invitation, err := h.GroupMemberService.GetByGroupAndUser(notificationData.GroupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Invitation not found")
+		return
+	}
+
+	// Verify the invitation is still pending
+	if invitation.Status != models.GroupMemberStatusInvited {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invitation is no longer pending")
+		return
+	}
+
+	// Update the invitation status based on user's response
+	var newStatus models.GroupMemberStatus
+	if req.Accept {
+		newStatus = models.GroupMemberStatusAccepted
+	} else {
+		newStatus = models.GroupMemberStatusRejected
+	}
+
+	if err := h.GroupMemberService.UpdateStatus(invitation.ID, newStatus); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update invitation status")
+		return
+	}
+
+	// Mark the notification as read
+	if err := h.NotificationService.MarkAsRead(notificationID, userID); err != nil {
+		// Log error but don't fail the request
+		// TODO: Add proper logging
+	}
+
+	responseMessage := "Invitation declined"
+	if req.Accept {
+		responseMessage = "Successfully joined the group"
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, responseMessage, nil)
 }
 
 // GetGroupMessages handles retrieving messages for a group
