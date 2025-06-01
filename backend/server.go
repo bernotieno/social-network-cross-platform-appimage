@@ -171,6 +171,7 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	groups.HandleFunc("/{id}/approve-request", middleware.AuthMiddleware(h.ApproveJoinRequest)).Methods("POST")
 	groups.HandleFunc("/{id}/reject-request", middleware.AuthMiddleware(h.RejectJoinRequest)).Methods("POST")
 	groups.HandleFunc("/{id}/invite", middleware.AuthMiddleware(h.InviteToGroup)).Methods("POST")
+	groups.HandleFunc("/invitations/{id}/respond", middleware.AuthMiddleware(h.RespondToGroupInvitation)).Methods("POST")
 	groups.HandleFunc("/{id}/posts", middleware.AuthMiddleware(h.GetGroupPosts)).Methods("GET")
 	groups.HandleFunc("/{id}/posts", middleware.AuthMiddleware(h.CreateGroupPost)).Methods("POST")
 	groups.HandleFunc("/{id}/events", middleware.AuthMiddleware(h.GetGroupEvents)).Methods("GET")
