@@ -1,0 +1,239 @@
+.groupPostsContainer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #65676b;
+}
+
+.createPostSection {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.createPostPrompt {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.createPostPrompt:hover {
+  background-color: #f8f9fa;
+}
+
+.userAvatar {
+  flex-shrink: 0;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #1877f2;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.promptText {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background-color: #f0f2f5;
+  border-radius: 20px;
+  color: #65676b;
+  font-size: 1rem;
+}
+
+.createPostForm {
+  padding: 1rem;
+}
+
+.formHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.userName {
+  font-weight: 600;
+  color: #1c1e21;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #65676b;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton:hover {
+  background-color: #f0f2f5;
+}
+
+.contentInput {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 1.1rem;
+  font-family: inherit;
+  color: #1c1e21;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+}
+
+.contentInput::placeholder {
+  color: #65676b;
+}
+
+.imagePreview {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.removeImage {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.formActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid #f0f2f5;
+}
+
+.attachments {
+  display: flex;
+  gap: 1rem;
+}
+
+.fileInput {
+  display: none;
+}
+
+.attachButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  color: #65676b;
+  cursor: pointer;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.attachButton:hover {
+  background-color: #f0f2f5;
+}
+
+.postsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.postWrapper {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.emptyPosts {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #65676b;
+}
+
+.emptyPosts p {
+  margin: 0 0 0.5rem;
+}
+
+.emptyPosts p:last-child {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .groupPostsContainer {
+    padding: 0;
+  }
+
+  .createPostPrompt {
+    padding: 0.75rem;
+  }
+
+  .promptText {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .createPostForm {
+    padding: 0.75rem;
+  }
+
+  .formActions {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .attachments {
+    justify-content: center;
+  }
+}

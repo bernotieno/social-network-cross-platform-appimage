@@ -1,0 +1,339 @@
+.groupMembersContainer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #65676b;
+}
+
+.restrictedAccess {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #65676b;
+}
+
+.tabNavigation {
+  display: flex;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.tabButton {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  font-weight: 600;
+  color: #65676b;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.tabButton:hover {
+  background-color: #f0f2f5;
+}
+
+.activeTab {
+  color: #1877f2;
+  border-bottom-color: #1877f2;
+  background-color: #f8f9fa;
+}
+
+.inviteSection {
+  margin-bottom: 1rem;
+}
+
+.membersList, .requestsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.emptyState {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #65676b;
+}
+
+.memberCard, .requestCard {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.memberCard:hover, .requestCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.memberLink, .requestLink {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.memberAvatar, .requestAvatar {
+  flex-shrink: 0;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #1877f2;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+
+.memberInfo, .requestInfo {
+  flex: 1;
+}
+
+.memberName, .requestName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1c1e21;
+  margin: 0 0 0.25rem;
+}
+
+.memberUsername, .requestUsername {
+  font-size: 0.9rem;
+  color: #65676b;
+  margin: 0;
+}
+
+.memberRole {
+  flex-shrink: 0;
+}
+
+.adminBadge {
+  background-color: #1877f2;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.requestActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Modal Styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal {
+  background-color: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  color: #1c1e21;
+  font-size: 1.25rem;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #65676b;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton:hover {
+  background-color: #f0f2f5;
+}
+
+.searchSection {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #1877f2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+.searchResults {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.searchLoading, .noResults {
+  padding: 2rem;
+  text-align: center;
+  color: #65676b;
+}
+
+.searchResultItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f0f2f5;
+  transition: background-color 0.2s;
+}
+
+.searchResultItem:hover {
+  background-color: #f8f9fa;
+}
+
+.searchResultItem:last-child {
+  border-bottom: none;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.userAvatar .avatarPlaceholder {
+  width: 40px;
+  height: 40px;
+  font-size: 1rem;
+}
+
+.userName {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1c1e21;
+  margin: 0 0 0.25rem;
+}
+
+.userUsername {
+  font-size: 0.85rem;
+  color: #65676b;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .groupMembersContainer {
+    padding: 0;
+  }
+  
+  .tabNavigation {
+    margin: 0 0 1rem;
+    border-radius: 0;
+  }
+  
+  .tabButton {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .memberCard, .requestCard {
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  
+  .requestActions {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .requestActions button {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .modal {
+    margin: 0;
+    border-radius: 0;
+    height: 100vh;
+    max-height: none;
+  }
+  
+  .modalHeader {
+    padding: 1rem;
+  }
+  
+  .searchSection {
+    padding: 1rem;
+  }
+  
+  .searchResultItem {
+    padding: 1rem;
+  }
+}
