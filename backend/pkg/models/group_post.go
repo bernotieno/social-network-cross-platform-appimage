@@ -19,11 +19,11 @@ type GroupPost struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	// Additional fields for API responses
-	User          *User `json:"author,omitempty"`
+	User          *User  `json:"author,omitempty"`
 	Group         *Group `json:"group,omitempty"`
-	LikesCount    int   `json:"likesCount,omitempty"`
-	CommentsCount int   `json:"commentsCount,omitempty"`
-	IsLiked       bool  `json:"isLikedByCurrentUser,omitempty"`
+	LikesCount    int    `json:"likesCount,omitempty"`
+	CommentsCount int    `json:"commentsCount,omitempty"`
+	IsLiked       bool   `json:"isLikedByCurrentUser,omitempty"`
 }
 
 // GroupPostService handles group post-related operations
@@ -47,7 +47,6 @@ func (s *GroupPostService) Create(post *GroupPost) error {
 		INSERT INTO group_posts (id, group_id, user_id, content, image, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, post.ID, post.GroupID, post.UserID, post.Content, post.Image, post.CreatedAt, post.UpdatedAt)
-
 	if err != nil {
 		return fmt.Errorf("failed to create group post: %w", err)
 	}
@@ -58,6 +57,7 @@ func (s *GroupPostService) Create(post *GroupPost) error {
 // GetByID retrieves a group post by ID
 func (s *GroupPostService) GetByID(id string, currentUserID string) (*GroupPost, error) {
 	post := &GroupPost{User: &User{}, Group: &Group{}}
+	var isLikedCount int
 	err := s.DB.QueryRow(`
 		SELECT gp.id, gp.group_id, gp.user_id, gp.content, gp.image, gp.created_at, gp.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
@@ -73,9 +73,12 @@ func (s *GroupPostService) GetByID(id string, currentUserID string) (*GroupPost,
 		&post.ID, &post.GroupID, &post.UserID, &post.Content, &post.Image, &post.CreatedAt, &post.UpdatedAt,
 		&post.User.ID, &post.User.Username, &post.User.FullName, &post.User.ProfilePicture,
 		&post.Group.ID, &post.Group.Name, &post.Group.Privacy,
-		&post.LikesCount, &post.CommentsCount, &post.IsLiked,
+		&post.LikesCount, &post.CommentsCount, &isLikedCount,
 	)
 
+	if err == nil {
+		post.IsLiked = isLikedCount > 0
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("group post not found")
@@ -92,7 +95,6 @@ func (s *GroupPostService) GetByID(id string, currentUserID string) (*GroupPost,
 			FROM group_members
 			WHERE group_id = ? AND user_id = ? AND status = 'accepted'
 		`, post.GroupID, currentUserID).Scan(&isMember)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to check group membership: %w", err)
 		}
@@ -114,7 +116,6 @@ func (s *GroupPostService) Update(post *GroupPost) error {
 		SET content = ?, image = ?, updated_at = ?
 		WHERE id = ? AND user_id = ?
 	`, post.Content, post.Image, post.UpdatedAt, post.ID, post.UserID)
-
 	if err != nil {
 		return fmt.Errorf("failed to update group post: %w", err)
 	}
@@ -132,7 +133,6 @@ func (s *GroupPostService) Delete(id, userID string) error {
 		FROM group_posts
 		WHERE id = ?
 	`, id).Scan(&groupID, &postAuthorID)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return errors.New("group post not found")
@@ -149,7 +149,6 @@ func (s *GroupPostService) Delete(id, userID string) error {
 			FROM group_members
 			WHERE group_id = ? AND user_id = ? AND role = 'admin' AND status = 'accepted'
 		`, groupID, userID).Scan(&isAdmin)
-
 		if err != nil {
 			return fmt.Errorf("failed to check admin status: %w", err)
 		}
@@ -188,7 +187,6 @@ func (s *GroupPostService) GetByGroup(groupID, currentUserID string, limit, offs
 			FROM group_members
 			WHERE group_id = ? AND user_id = ? AND status = 'accepted'
 		`, groupID, currentUserID).Scan(&isMember)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to check group membership: %w", err)
 		}
@@ -211,7 +209,6 @@ func (s *GroupPostService) GetByGroup(groupID, currentUserID string, limit, offs
 		ORDER BY gp.created_at DESC
 		LIMIT ? OFFSET ?
 	`, currentUserID, groupID, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group posts: %w", err)
 	}
@@ -220,14 +217,16 @@ func (s *GroupPostService) GetByGroup(groupID, currentUserID string, limit, offs
 	var posts []*GroupPost
 	for rows.Next() {
 		post := &GroupPost{User: &User{}}
+		var isLikedCount int
 		err := rows.Scan(
 			&post.ID, &post.GroupID, &post.UserID, &post.Content, &post.Image, &post.CreatedAt, &post.UpdatedAt,
 			&post.User.ID, &post.User.Username, &post.User.FullName, &post.User.ProfilePicture,
-			&post.LikesCount, &post.CommentsCount, &post.IsLiked,
+			&post.LikesCount, &post.CommentsCount, &isLikedCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan group post: %w", err)
 		}
+		post.IsLiked = isLikedCount > 0
 		posts = append(posts, post)
 	}
 
