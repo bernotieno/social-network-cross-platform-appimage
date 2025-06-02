@@ -10,7 +10,7 @@ import Button from '@/components/Button';
 import Post from '@/components/Post';
 import styles from '@/styles/GroupPosts.module.css';
 
-export default function GroupPosts({ groupId, isGroupMember }) {
+export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
   const { user } = useAuth();
   const { showSuccess, showError } = useAlert();
   const [posts, setPosts] = useState([]);
@@ -257,6 +257,7 @@ export default function GroupPosts({ groupId, isGroupMember }) {
                 onDelete={handlePostDelete}
                 isGroupPost={true}
                 groupId={groupId}
+                isGroupAdmin={isGroupAdmin}
               />
             </div>
           ))
