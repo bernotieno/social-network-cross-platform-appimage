@@ -167,6 +167,7 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	groups.HandleFunc("/{id}/join", middleware.AuthMiddleware(h.JoinGroup)).Methods("POST")
 	groups.HandleFunc("/{id}/join", middleware.AuthMiddleware(h.LeaveGroup)).Methods("DELETE")
 	groups.HandleFunc("/{id}/members", middleware.AuthMiddleware(h.GetGroupMembers)).Methods("GET")
+	groups.HandleFunc("/{id}/members/{userId}", middleware.AuthMiddleware(h.RemoveGroupMember)).Methods("DELETE")
 	groups.HandleFunc("/{id}/pending-requests", middleware.AuthMiddleware(h.GetGroupPendingRequests)).Methods("GET")
 	groups.HandleFunc("/{id}/approve-request", middleware.AuthMiddleware(h.ApproveJoinRequest)).Methods("POST")
 	groups.HandleFunc("/{id}/reject-request", middleware.AuthMiddleware(h.RejectJoinRequest)).Methods("POST")
@@ -174,6 +175,7 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	groups.HandleFunc("/invitations/{id}/respond", middleware.AuthMiddleware(h.RespondToGroupInvitation)).Methods("POST")
 	groups.HandleFunc("/{id}/posts", middleware.AuthMiddleware(h.GetGroupPosts)).Methods("GET")
 	groups.HandleFunc("/{id}/posts", middleware.AuthMiddleware(h.CreateGroupPost)).Methods("POST")
+	groups.HandleFunc("/{groupId}/posts/{postId}", middleware.AuthMiddleware(h.DeleteGroupPost)).Methods("DELETE")
 	groups.HandleFunc("/{groupId}/posts/{postId}/like", middleware.AuthMiddleware(h.LikeGroupPost)).Methods("POST")
 	groups.HandleFunc("/{groupId}/posts/{postId}/like", middleware.AuthMiddleware(h.UnlikeGroupPost)).Methods("DELETE")
 	groups.HandleFunc("/{groupId}/posts/{postId}/comments", middleware.AuthMiddleware(h.GetGroupPostComments)).Methods("GET")
@@ -181,6 +183,8 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	groups.HandleFunc("/{groupId}/posts/{postId}/comments/{commentId}", middleware.AuthMiddleware(h.DeleteGroupPostComment)).Methods("DELETE")
 	groups.HandleFunc("/{id}/events", middleware.AuthMiddleware(h.GetGroupEvents)).Methods("GET")
 	groups.HandleFunc("/{id}/events", middleware.AuthMiddleware(h.CreateGroupEvent)).Methods("POST")
+	groups.HandleFunc("/events/{id}", middleware.AuthMiddleware(h.UpdateGroupEvent)).Methods("PUT")
+	groups.HandleFunc("/events/{id}", middleware.AuthMiddleware(h.DeleteGroupEvent)).Methods("DELETE")
 	groups.HandleFunc("/events/{id}/respond", middleware.AuthMiddleware(h.RespondToEvent)).Methods("POST")
 	groups.HandleFunc("/{id}/messages", middleware.AuthMiddleware(h.GetGroupMessages)).Methods("GET")
 	groups.HandleFunc("/{id}/messages", middleware.AuthMiddleware(h.SendGroupMessage)).Methods("POST")
@@ -196,6 +200,7 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	// Message routes
 	messages := api.PathPrefix("/messages").Subrouter()
 	messages.HandleFunc("", middleware.AuthMiddleware(h.SendMessage)).Methods("POST")
+	messages.HandleFunc("/online-users", middleware.AuthMiddleware(h.GetOnlineUsers)).Methods("GET")
 	messages.HandleFunc("/{userId}", middleware.AuthMiddleware(h.GetMessages)).Methods("GET")
 
 	// WebSocket route is registered separately before middleware to avoid hijacker issues
