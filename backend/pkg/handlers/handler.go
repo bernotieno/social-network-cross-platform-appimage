@@ -266,6 +266,54 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetOnlineUsers handles getting currently online users
+func (h *Handler) GetOnlineUsers(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context using the middleware helper
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get online users from the WebSocket hub
+	onlineUserIDs := h.getOnlineUserIDs()
+
+	// Get user details for online users
+	var onlineUsers []*models.User
+	for _, id := range onlineUserIDs {
+		if id != userID { // Don't include the current user
+			user, err := h.UserService.GetByID(id)
+			if err != nil {
+				log.Printf("Error getting user %s: %v", id, err)
+				continue
+			}
+			// Clear password for security
+			user.Password = ""
+			onlineUsers = append(onlineUsers, user)
+		}
+	}
+
+	// Return online users
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":     true,
+		"onlineUsers": onlineUsers,
+	})
+}
+
+// getOnlineUserIDs returns a list of currently online user IDs from the WebSocket hub
+func (h *Handler) getOnlineUserIDs() []string {
+	if h.Hub == nil {
+		return []string{}
+	}
+
+	var userIDs []string
+	for userID := range h.Hub.OnlineUsers {
+		userIDs = append(userIDs, userID)
+	}
+	return userIDs
+}
+
 // validatePrivateMessagePermission checks if a user can send a private message to another user
 func (h *Handler) validatePrivateMessagePermission(senderID, receiverID string) error {
 	// Get receiver's profile
