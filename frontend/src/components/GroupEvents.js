@@ -8,13 +8,15 @@ import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import styles from '@/styles/GroupEvents.module.css';
 
-export default function GroupEvents({ groupId, isGroupMember }) {
+export default function GroupEvents({ groupId, isGroupMember, isGroupAdmin }) {
   const { user } = useAuth();
   const { showSuccess, showError } = useAlert();
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -54,7 +56,7 @@ export default function GroupEvents({ groupId, isGroupMember }) {
     e.preventDefault();
 
     if (!newEvent.title.trim() || !newEvent.startTime || !newEvent.endTime) {
-      alert('Please fill in all required fields');
+      showError('Please fill in all required fields', 'Validation Error');
       return;
     }
 
@@ -63,7 +65,7 @@ export default function GroupEvents({ groupId, isGroupMember }) {
     const endDate = new Date(newEvent.endTime);
 
     if (endDate <= startDate) {
-      alert('End time must be after start time');
+      showError('End time must be after start time', 'Validation Error');
       return;
     }
 
@@ -133,8 +135,89 @@ export default function GroupEvents({ groupId, isGroupMember }) {
       }));
     } catch (error) {
       console.error('Error responding to event:', error);
-      alert('Failed to update response. Please try again.');
+      showError('Failed to update response. Please try again.');
     }
+  };
+
+  const handleEditEvent = (event) => {
+    setEditingEvent({
+      ...event,
+      startTime: new Date(event.startTime).toISOString().slice(0, 16),
+      endTime: new Date(event.endTime).toISOString().slice(0, 16)
+    });
+  };
+
+  const handleUpdateEvent = async (e) => {
+    e.preventDefault();
+
+    if (!editingEvent.title.trim() || !editingEvent.startTime || !editingEvent.endTime) {
+      showError('Please fill in all required fields', 'Validation Error');
+      return;
+    }
+
+    // Validate that end time is after start time
+    const startDate = new Date(editingEvent.startTime);
+    const endDate = new Date(editingEvent.endTime);
+
+    if (endDate <= startDate) {
+      showError('End time must be after start time', 'Validation Error');
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      // Convert datetime-local format to RFC3339 format
+      const eventData = {
+        ...editingEvent,
+        startTime: new Date(editingEvent.startTime).toISOString(),
+        endTime: new Date(editingEvent.endTime).toISOString()
+      };
+
+      const response = await groupAPI.updateGroupEvent(editingEvent.id, eventData);
+
+      if (response.data.success) {
+        const updatedEvent = response.data.data.event;
+        setEvents(prev => prev.map(event =>
+          event.id === updatedEvent.id ? updatedEvent : event
+        ));
+
+        showSuccess('Event updated successfully!', 'Event Updated');
+        setEditingEvent(null);
+      }
+    } catch (error) {
+      console.error('Error updating event:', error);
+      showError(error.response?.data?.message || 'Failed to update event. Please try again.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    if (!window.confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await groupAPI.deleteGroupEvent(eventId);
+      setEvents(prev => prev.filter(event => event.id !== eventId));
+      showSuccess('Event deleted successfully!', 'Event Deleted');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      showError(error.response?.data?.message || 'Failed to delete event. Please try again.');
+    }
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditingEvent(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const canEditEvent = (event) => {
+    return user && (event.creatorId === user.id || isGroupAdmin);
   };
 
   const formatDateTime = (dateTimeString) => {
@@ -302,54 +385,147 @@ export default function GroupEvents({ groupId, isGroupMember }) {
                     )}
                   </div>
                 </div>
-                {isEventPast(event.endTime) && (
-                  <div className={styles.pastEventBadge}>Past Event</div>
-                )}
+                <div className={styles.eventHeaderActions}>
+                  {isEventPast(event.endTime) && (
+                    <div className={styles.pastEventBadge}>Past Event</div>
+                  )}
+                  {canEditEvent(event) && !isEventPast(event.endTime) && (
+                    <div className={styles.eventManageActions}>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        onClick={() => handleEditEvent(event)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="small"
+                        onClick={() => handleDeleteEvent(event.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {event.description && (
-                <p className={styles.eventDescription}>{event.description}</p>
-              )}
+              {editingEvent && editingEvent.id === event.id ? (
+                <form onSubmit={handleUpdateEvent} className={styles.editEventForm}>
+                  <div className={styles.inputGroup}>
+                    <label className={styles.label}>Event Title *</label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={editingEvent.title}
+                      onChange={handleEditInputChange}
+                      className={styles.input}
+                      required
+                    />
+                  </div>
 
-              <div className={styles.eventStats}>
+                  <div className={styles.inputGroup}>
+                    <label className={styles.label}>Description</label>
+                    <textarea
+                      name="description"
+                      value={editingEvent.description}
+                      onChange={handleEditInputChange}
+                      className={styles.textarea}
+                      rows="3"
+                    />
+                  </div>
+
+                  <div className={styles.inputGroup}>
+                    <label className={styles.label}>Location</label>
+                    <input
+                      type="text"
+                      name="location"
+                      value={editingEvent.location}
+                      onChange={handleEditInputChange}
+                      className={styles.input}
+                    />
+                  </div>
+
+                  <div className={styles.dateTimeRow}>
+                    <div className={styles.inputGroup}>
+                      <label className={styles.label}>Start Time *</label>
+                      <input
+                        type="datetime-local"
+                        name="startTime"
+                        value={editingEvent.startTime}
+                        onChange={handleEditInputChange}
+                        className={styles.input}
+                        required
+                      />
+                    </div>
+
+                    <div className={styles.inputGroup}>
+                      <label className={styles.label}>End Time *</label>
+                      <input
+                        type="datetime-local"
+                        name="endTime"
+                        value={editingEvent.endTime}
+                        onChange={handleEditInputChange}
+                        className={styles.input}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.formActions}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setEditingEvent(null)}
+                      disabled={isUpdating}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? 'Updating...' : 'Update Event'}
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  {event.description && (
+                    <p className={styles.eventDescription}>{event.description}</p>
+                  )}
+
+                  <div className={styles.eventStats}>
                 <div className={styles.statItem}>
                   <span className={styles.statNumber}>{event.goingCount || 0}</span>
                   <span className={styles.statLabel}>Going</span>
                 </div>
                 <div className={styles.statItem}>
-                  <span className={styles.statNumber}>{event.maybeCount || 0}</span>
-                  <span className={styles.statLabel}>Maybe</span>
-                </div>
-                <div className={styles.statItem}>
                   <span className={styles.statNumber}>{event.declinedCount || 0}</span>
                   <span className={styles.statLabel}>Can't Go</span>
                 </div>
-              </div>
+                  </div>
 
-              {isGroupMember && !isEventPast(event.endTime) && (
-                <div className={styles.eventActions}>
-                  <Button
-                    variant={event.userResponse === 'going' ? 'primary' : 'outline'}
-                    onClick={() => handleEventResponse(event.id, 'going')}
-                    size="small"
-                  >
-                    Going
-                  </Button>
-                  <Button
-                    variant={event.userResponse === 'maybe' ? 'primary' : 'outline'}
-                    onClick={() => handleEventResponse(event.id, 'maybe')}
-                    size="small"
-                  >
-                    Maybe
-                  </Button>
-                  <Button
-                    variant={event.userResponse === 'not_going' ? 'primary' : 'outline'}
-                    onClick={() => handleEventResponse(event.id, 'not_going')}
-                    size="small"
-                  >
-                    Can&apos;t Go
-                  </Button>
-                </div>
+                  {isGroupMember && !isEventPast(event.endTime) && (
+                    <div className={styles.eventActions}>
+                      <Button
+                        variant={event.userResponse === 'going' ? 'primary' : 'outline'}
+                        onClick={() => handleEventResponse(event.id, 'going')}
+                        size="small"
+                      >
+                        Going
+                      </Button>
+                      <Button
+                        variant={event.userResponse === 'not_going' ? 'primary' : 'outline'}
+                        onClick={() => handleEventResponse(event.id, 'not_going')}
+                        size="small"
+                      >
+                        Can&apos;t Go
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))
