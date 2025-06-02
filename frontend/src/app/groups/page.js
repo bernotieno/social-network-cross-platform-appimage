@@ -55,11 +55,11 @@ export default function Groups() {
     try {
       await groupAPI.joinGroup(groupId);
 
-      // Update local state
+      // Update local state with request status
       setGroups(prev =>
         prev.map(group =>
           group.id === groupId
-            ? { ...group, isJoined: true }
+            ? { ...group, requestStatus: 'pending' }
             : group
         )
       );
@@ -196,11 +196,13 @@ export default function Groups() {
                     </Button>
                   ) : (
                     <Button
-                      variant="primary"
+                      variant={group.requestStatus === 'pending' ? 'outline' : 'primary'}
                       fullWidth
                       onClick={() => handleJoinGroup(group.id)}
+                      disabled={group.requestStatus === 'pending'}
                     >
-                      Join Group
+                      {group.requestStatus === 'pending' ? 'Request Sent' :
+                       group.requestStatus === 'rejected' ? 'Request Again' : 'Request to Join'}
                     </Button>
                   )}
                 </div>
