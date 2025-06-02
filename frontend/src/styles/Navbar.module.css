@@ -28,7 +28,7 @@
 }
 
 .logoText {
-  color: #1877f2;
+  color: #10b981;
   cursor: pointer;
 }
 
@@ -47,7 +47,7 @@
 }
 
 .navLink:hover {
-  color: #1877f2;
+  color: #10b981;
 }
 
 .badge {
@@ -86,7 +86,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: #1877f2;
+  background-color: #10b981;
   color: white;
   display: flex;
   align-items: center;
@@ -126,7 +126,7 @@
 
 .dropdownItem:hover {
   background-color: #f0f2f5;
-  color: #1877f2;
+  color: #10b981;
 }
 
 /* Mobile menu */
