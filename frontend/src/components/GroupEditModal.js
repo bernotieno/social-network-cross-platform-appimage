@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { groupAPI } from '@/utils/api';
+import { useAlert } from '@/contexts/AlertContext';
 import { getImageUrl } from '@/utils/images';
 import Button from '@/components/Button';
 import styles from '@/styles/GroupEditModal.module.css';
 
 export default function GroupEditModal({ group, isOpen, onClose, onUpdate }) {
+  const { showAlert, showSuccess, showError } = useAlert();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -58,7 +60,7 @@ export default function GroupEditModal({ group, isOpen, onClose, onUpdate }) {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert('Group name is required');
+      showError('Group name is required', 'Validation Error');
       return;
     }
 
@@ -78,7 +80,7 @@ export default function GroupEditModal({ group, isOpen, onClose, onUpdate }) {
       const response = await groupAPI.updateGroup(group.id, submitData);
 
       if (response.data.success) {
-        alert('Group updated successfully!');
+        showSuccess('Group updated successfully!');
         onUpdate(); // Refresh group data
         onClose(); // Close modal
       } else {
@@ -86,7 +88,7 @@ export default function GroupEditModal({ group, isOpen, onClose, onUpdate }) {
       }
     } catch (error) {
       console.error('Error updating group:', error);
-      alert(error.response?.data?.message || 'Failed to update group. Please try again.');
+      showError(error.response?.data?.message || 'Failed to update group. Please try again.');
     } finally {
       setIsLoading(false);
     }
