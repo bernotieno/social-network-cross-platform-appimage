@@ -28,9 +28,10 @@ type Group struct {
 	CreatedAt   time.Time    `json:"createdAt"`
 	UpdatedAt   time.Time    `json:"updatedAt"`
 	// Additional fields for API responses
-	Creator      *User `json:"creator,omitempty"`
-	MembersCount int   `json:"membersCount,omitempty"`
-	IsJoined     bool  `json:"isJoined"`
+	Creator       *User  `json:"creator,omitempty"`
+	MembersCount  int    `json:"membersCount,omitempty"`
+	IsJoined      bool   `json:"isJoined"`
+	RequestStatus string `json:"requestStatus,omitempty"` // pending, accepted, rejected, none
 }
 
 // GroupService handles group-related operations
@@ -64,24 +65,34 @@ func (s *GroupService) Create(group *Group) error {
 // GetByID retrieves a group by ID
 func (s *GroupService) GetByID(id string, currentUserID string) (*Group, error) {
 	group := &Group{Creator: &User{}}
+	var requestStatus sql.NullString
+
 	err := s.DB.QueryRow(`
 		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
-			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') + 1 as members_count,
-			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
+			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		WHERE g.id = ?
-	`, currentUserID, currentUserID, id).Scan(
+	`, currentUserID, currentUserID, currentUserID, id).Scan(
 		&group.ID, &group.Name, &group.Description, &group.CreatorID, &group.CoverPhoto, &group.Privacy, &group.CreatedAt, &group.UpdatedAt,
 		&group.Creator.ID, &group.Creator.Username, &group.Creator.FullName, &group.Creator.ProfilePicture,
-		&group.MembersCount, &group.IsJoined,
+		&group.MembersCount, &group.IsJoined, &requestStatus,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("group not found")
 		}
 		return nil, fmt.Errorf("failed to get group: %w", err)
+	}
+
+	// Set request status
+	if requestStatus.Valid {
+		group.RequestStatus = requestStatus.String
+	} else {
+		group.RequestStatus = "none"
 	}
 
 	// Check if the user can view this group
@@ -142,8 +153,9 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 		rows, err = s.DB.Query(`
 			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') + 1 as members_count,
-				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined
+				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
+				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+				(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 			FROM groups g
 			JOIN users u ON g.creator_id = u.id
 			WHERE (g.name LIKE ? OR g.description LIKE ?) AND (g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
@@ -151,13 +163,14 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 			))
 			ORDER BY g.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", currentUserID, currentUserID, limit, offset)
+		`, currentUserID, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", currentUserID, currentUserID, limit, offset)
 	} else {
 		rows, err = s.DB.Query(`
 			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') + 1 as members_count,
-				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined
+				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
+				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+				(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 			FROM groups g
 			JOIN users u ON g.creator_id = u.id
 			WHERE g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
@@ -165,7 +178,7 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 			)
 			ORDER BY g.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, currentUserID, currentUserID, limit, offset)
+		`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, limit, offset)
 	}
 
 	if err != nil {
@@ -176,14 +189,23 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 	var groups []*Group
 	for rows.Next() {
 		group := &Group{Creator: &User{}}
+		var requestStatus sql.NullString
 		err := rows.Scan(
 			&group.ID, &group.Name, &group.Description, &group.CreatorID, &group.CoverPhoto, &group.Privacy, &group.CreatedAt, &group.UpdatedAt,
 			&group.Creator.ID, &group.Creator.Username, &group.Creator.FullName, &group.Creator.ProfilePicture,
-			&group.MembersCount, &group.IsJoined,
+			&group.MembersCount, &group.IsJoined, &requestStatus,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan group: %w", err)
 		}
+
+		// Set request status
+		if requestStatus.Valid {
+			group.RequestStatus = requestStatus.String
+		} else {
+			group.RequestStatus = "none"
+		}
+
 		groups = append(groups, group)
 	}
 
