@@ -295,3 +295,92 @@ func (s *GroupMemberService) IsGroupMember(groupID, userID string) (bool, error)
 
 	return count > 0, nil
 }
+
+// Update updates a group member
+func (s *GroupMemberService) Update(member *GroupMember) error {
+	member.UpdatedAt = time.Now()
+
+	_, err := s.DB.Exec(`
+		UPDATE group_members
+		SET role = ?, status = ?, updated_at = ?
+		WHERE id = ?
+	`, member.Role, member.Status, member.UpdatedAt, member.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update group member: %w", err)
+	}
+
+	return nil
+}
+
+// GetGroupAdmins retrieves all admins of a group (including creator)
+func (s *GroupMemberService) GetGroupAdmins(groupID string) ([]*GroupMember, error) {
+	// First get all admin members
+	rows, err := s.DB.Query(`
+		SELECT gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.created_at, gm.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture
+		FROM group_members gm
+		JOIN users u ON gm.user_id = u.id
+		WHERE gm.group_id = ? AND gm.role = 'admin' AND gm.status = 'accepted'
+	`, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group admins: %w", err)
+	}
+	defer rows.Close()
+
+	var admins []*GroupMember
+	adminUserIDs := make(map[string]bool) // Track unique user IDs
+
+	// Add all admin members
+	for rows.Next() {
+		admin := &GroupMember{User: &User{}}
+		err := rows.Scan(
+			&admin.ID, &admin.GroupID, &admin.UserID, &admin.Role, &admin.Status, &admin.CreatedAt, &admin.UpdatedAt,
+			&admin.User.ID, &admin.User.Username, &admin.User.FullName, &admin.User.ProfilePicture,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan group admin: %w", err)
+		}
+
+		admins = append(admins, admin)
+		adminUserIDs[admin.UserID] = true
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating group admins: %w", err)
+	}
+
+	// Now get the group creator if they're not already included as an admin
+	var creatorID string
+	err = s.DB.QueryRow(`
+		SELECT g.creator_id
+		FROM groups g
+		WHERE g.id = ?
+	`, groupID).Scan(&creatorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group creator: %w", err)
+	}
+
+	// If creator is not already in the admins list, add them
+	if !adminUserIDs[creatorID] {
+		var creator GroupMember
+		creator.User = &User{}
+		err = s.DB.QueryRow(`
+			SELECT u.id, u.username, u.full_name, u.profile_picture
+			FROM users u
+			WHERE u.id = ?
+		`, creatorID).Scan(
+			&creator.User.ID, &creator.User.Username, &creator.User.FullName, &creator.User.ProfilePicture,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get creator user info: %w", err)
+		}
+
+		creator.GroupID = groupID
+		creator.UserID = creatorID
+		creator.Role = GroupMemberRoleAdmin
+		creator.Status = GroupMemberStatusAccepted
+		admins = append(admins, &creator)
+	}
+
+	return admins, nil
+}
