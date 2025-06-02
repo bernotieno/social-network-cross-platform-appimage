@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 import useNotifications from '@/hooks/useNotifications';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
 import { groupAPI } from '@/utils/api';
+import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import styles from '@/styles/Notifications.module.css';
@@ -22,6 +23,8 @@ export default function Notifications() {
     deleteNotification,
     deleteAllNotifications
   } = useNotifications();
+
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     fetchNotifications();
@@ -144,6 +147,18 @@ export default function Notifications() {
             </div>
           </>
         );
+      case 'group_join_approved':
+        return (
+          <span className={styles.notificationText}>
+            approved your request to join the group "{notificationData.groupName || 'Unknown Group'}"
+          </span>
+        );
+      case 'group_join_rejected':
+        return (
+          <span className={styles.notificationText}>
+            declined your request to join the group "{notificationData.groupName || 'Unknown Group'}"
+          </span>
+        );
       case 'event_invite':
         return (
           <>
@@ -206,9 +221,61 @@ export default function Notifications() {
     }
   };
 
-  const handleGroupJoinResponse = (notificationId, accept) => {
-    console.log(`Group join request ${accept ? 'accepted' : 'declined'}: ${notificationId}`);
-    markAsRead(notificationId);
+  const handleGroupJoinResponse = async (notificationId, accept) => {
+    try {
+      // Get the notification to extract group and user information
+      const notification = notifications.find(n => n.id === notificationId);
+      if (!notification) {
+        console.error('Notification not found');
+        return;
+      }
+
+      // Parse the notification data to get group and user info
+      let notificationData;
+      try {
+        notificationData = JSON.parse(notification.data);
+      } catch (error) {
+        console.error('Failed to parse notification data:', error);
+        return;
+      }
+
+      const groupId = notificationData.groupId;
+      const userId = notification.senderId; // The user who sent the request
+
+      if (!groupId || !userId) {
+        console.error('Missing group ID or user ID in notification data');
+        return;
+      }
+
+      // Call the appropriate API endpoint
+      if (accept) {
+        await groupAPI.approveJoinRequest(groupId, userId);
+        showAlert({
+          type: 'success',
+          title: 'Success',
+          message: 'Join request approved successfully!'
+        });
+      } else {
+        await groupAPI.rejectJoinRequest(groupId, userId);
+        showAlert({
+          type: 'success',
+          title: 'Success',
+          message: 'Join request rejected successfully!'
+        });
+      }
+
+      // Mark notification as read and refresh notifications
+      markAsRead(notificationId);
+      fetchNotifications();
+
+    } catch (error) {
+      console.error('Error responding to group join request:', error);
+      showAlert({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.message || 'Failed to respond to join request. Please try again.'
+      });
+    }
   };
 
   const handleEventResponse = (notificationId, response) => {
