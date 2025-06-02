@@ -16,7 +16,7 @@
 .heroTitle {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #1877f2;
+  color: #10b981;
   margin-bottom: 1rem;
 }
 
@@ -46,14 +46,15 @@
   background-color: white;
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
   text-align: center;
   transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .feature:hover {
   transform: translateY(-5px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .featureIcon {
@@ -65,7 +66,7 @@
   font-size: 1.25rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #1877f2;
+  color: #10b981;
 }
 
 .feature p {
@@ -84,7 +85,7 @@
   font-size: 1.75rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
-  color: #1877f2;
+  color: #10b981;
 }
 
 .loading {
@@ -100,14 +101,15 @@
   padding: 3rem;
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .emptyFeed h2 {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #1877f2;
+  color: #10b981;
 }
 
 .emptyFeed p {
@@ -118,8 +120,9 @@
 .feedContent {
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
   padding: 1.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .feedHeader {
