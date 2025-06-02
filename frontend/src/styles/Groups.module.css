@@ -14,7 +14,7 @@
 .groupsTitle {
   font-size: 1.75rem;
   font-weight: 600;
-  color: #1877f2;
+  color: #10b981;
   margin: 0;
 }
 
@@ -43,8 +43,8 @@
 }
 
 .activeTab {
-  color: #1877f2;
-  border-bottom: 2px solid #1877f2;
+  color: #10b981;
+  border-bottom: 2px solid #10b981;
 }
 
 .loading, .emptyGroups {
@@ -93,7 +93,7 @@
 .defaultCover {
   width: 100%;
   height: 100%;
-  background: linear-gradient(45deg, #1877f2, #0099ff);
+  background: linear-gradient(45deg, #10b981, #0f9467);
 }
 
 .groupInfo {
