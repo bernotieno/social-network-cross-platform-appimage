@@ -55,7 +55,11 @@ export default function GroupPage() {
       if (error.response?.status === 404) {
         router.push('/groups');
       } else {
-        alert('Failed to load group. Please try again.');
+        showAlert({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to load group. Please try again.'
+        });
       }
     } finally {
       setIsLoading(false);
@@ -70,33 +74,24 @@ export default function GroupPage() {
       const response = await groupAPI.joinGroup(group.id);
 
       if (response.data.success) {
-        // Update group state
+        // Update group state with request status
         setGroup(prev => ({
           ...prev,
-          isJoined: true,
-          membersCount: prev.membersCount + 1
+          requestStatus: 'pending'
         }));
 
-        if (group.privacy === 'private') {
-          showAlert({
-            type: 'info',
-            title: 'Request Sent',
-            message: 'Join request sent! You will be notified when the group admin responds.'
-          });
-        } else {
-          showAlert({
-            type: 'success',
-            title: 'Success',
-            message: 'Successfully joined the group!'
-          });
-        }
+        showAlert({
+          type: 'info',
+          title: 'Request Sent',
+          message: 'Join request sent! You will be notified when a group admin responds.'
+        });
       }
     } catch (error) {
       console.error('Error joining group:', error);
       showAlert({
         type: 'error',
         title: 'Error',
-        message: error.response?.data?.message || 'Failed to join group. Please try again.'
+        message: error.response?.data?.message || 'Failed to send join request. Please try again.'
       });
     } finally {
       setIsJoining(false);
@@ -244,12 +239,13 @@ export default function GroupPage() {
                 </Button>
               ) : (
                 <Button
-                  variant="primary"
+                  variant={group.requestStatus === 'pending' ? 'outline' : 'primary'}
                   onClick={handleJoinGroup}
-                  disabled={isJoining}
+                  disabled={isJoining || group.requestStatus === 'pending'}
                 >
-                  {isJoining ? 'Joining...' :
-                   group.privacy === 'private' ? 'Request to Join' : 'Join Group'}
+                  {isJoining ? 'Sending Request...' :
+                   group.requestStatus === 'pending' ? 'Request Sent' :
+                   group.requestStatus === 'rejected' ? 'Request Again' : 'Request to Join'}
                 </Button>
               )}
             </div>
@@ -292,10 +288,18 @@ export default function GroupPage() {
             {/* Tab Content */}
             <div className={styles.tabContent}>
               {activeTab === 'posts' && (
-                <GroupPosts groupId={group.id} isGroupMember={isGroupMember()} />
+                <GroupPosts
+                  groupId={group.id}
+                  isGroupMember={isGroupMember()}
+                  isGroupAdmin={isGroupAdmin()}
+                />
               )}
               {activeTab === 'events' && (
-                <GroupEvents groupId={group.id} isGroupMember={isGroupMember()} />
+                <GroupEvents
+                  groupId={group.id}
+                  isGroupMember={isGroupMember()}
+                  isGroupAdmin={isGroupAdmin()}
+                />
               )}
               {activeTab === 'members' && (
                 <GroupMembers
@@ -318,8 +322,14 @@ export default function GroupPage() {
             <div className={styles.restrictedMessage}>
               <h3>This is a private group</h3>
               <p>You need to be a member to see posts and other content.</p>
-              <Button variant="primary" onClick={handleJoinGroup} disabled={isJoining}>
-                {isJoining ? 'Sending Request...' : 'Request to Join'}
+              <Button
+                variant={group.requestStatus === 'pending' ? 'outline' : 'primary'}
+                onClick={handleJoinGroup}
+                disabled={isJoining || group.requestStatus === 'pending'}
+              >
+                {isJoining ? 'Sending Request...' :
+                 group.requestStatus === 'pending' ? 'Request Sent' :
+                 group.requestStatus === 'rejected' ? 'Request Again' : 'Request to Join'}
               </Button>
             </div>
           </div>
