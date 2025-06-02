@@ -337,19 +337,40 @@ func (h *Handler) JoinGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user is already a member
-	if group.IsJoined {
-		utils.RespondWithError(w, http.StatusConflict, "Already a member of this group")
-		return
+	// Check if user is already a member or has a pending request
+	existingMember, err := h.GroupMemberService.GetByGroupAndUser(groupID, userID)
+	if err == nil {
+		// User already has a relationship with this group
+		switch existingMember.Status {
+		case models.GroupMemberStatusAccepted:
+			utils.RespondWithError(w, http.StatusConflict, "Already a member of this group")
+			return
+		case models.GroupMemberStatusPending:
+			utils.RespondWithError(w, http.StatusConflict, "Join request already pending")
+			return
+		case models.GroupMemberStatusRejected:
+			// Allow user to request again by updating the existing record
+			existingMember.Status = models.GroupMemberStatusPending
+			existingMember.UpdatedAt = time.Now()
+			if err := h.GroupMemberService.Update(existingMember); err != nil {
+				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update join request")
+				return
+			}
+
+			// Create notification for group admins
+			h.createJoinRequestNotification(group, userID)
+
+			utils.RespondWithSuccess(w, http.StatusOK, "Join request sent", map[string]interface{}{
+				"status": models.GroupMemberStatusPending,
+			})
+			return
+		}
 	}
 
-	// Determine status based on group privacy
-	status := models.GroupMemberStatusAccepted
-	if group.Privacy == models.GroupPrivacyPrivate {
-		status = models.GroupMemberStatusPending
-	}
+	// All groups now require admin approval for join requests
+	status := models.GroupMemberStatusPending
 
-	// Create group member
+	// Create group member with pending status
 	member := &models.GroupMember{
 		GroupID: groupID,
 		UserID:  userID,
@@ -358,18 +379,34 @@ func (h *Handler) JoinGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.GroupMemberService.Create(member); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to join group")
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create join request")
 		return
 	}
 
-	// Create notification for group creator if it's a private group
-	if group.Privacy == models.GroupPrivacyPrivate {
+	// Create notification for group admins
+	h.createJoinRequestNotification(group, userID)
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Join request sent", map[string]interface{}{
+		"status": status,
+	})
+}
+
+// createJoinRequestNotification creates a notification for group admins about a join request
+func (h *Handler) createJoinRequestNotification(group *models.Group, requesterID string) {
+	// Get all group admins
+	admins, err := h.GroupMemberService.GetGroupAdmins(group.ID)
+	if err != nil {
+		return // Log error but don't fail the request
+	}
+
+	// Create notification for each admin
+	for _, admin := range admins {
 		notification := &models.Notification{
-			UserID:   group.CreatorID,
-			SenderID: userID,
+			UserID:   admin.UserID,
+			SenderID: requesterID,
 			Type:     models.NotificationTypeGroupJoinRequest,
 			Content:  "requested to join your group",
-			Data:     `{"groupId":"` + groupID + `","groupName":"` + group.Name + `"}`,
+			Data:     `{"groupId":"` + group.ID + `","groupName":"` + group.Name + `"}`,
 		}
 
 		if err := h.NotificationService.Create(notification); err != nil {
@@ -377,10 +414,6 @@ func (h *Handler) JoinGroup(w http.ResponseWriter, r *http.Request) {
 			// TODO: Add proper logging
 		}
 	}
-
-	utils.RespondWithSuccess(w, http.StatusOK, "Group join request sent", map[string]interface{}{
-		"status": status,
-	})
 }
 
 // LeaveGroup handles leaving a group
@@ -753,6 +786,131 @@ func (h *Handler) RespondToEvent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdateGroupEvent handles updating an event
+func (h *Handler) UpdateGroupEvent(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get event ID from URL
+	vars := mux.Vars(r)
+	eventID := vars["id"]
+
+	// Parse request body
+	var req CreateGroupEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.Title == "" || req.StartTime == "" || req.EndTime == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "Title, start time, and end time are required")
+		return
+	}
+
+	// Get the existing event
+	existingEvent, err := h.EventService.GetByID(eventID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	// Check if user is the creator or a group admin
+	isCreator := existingEvent.CreatorID == userID
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(existingEvent.GroupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isCreator && !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only event creator or group admin can update this event")
+		return
+	}
+
+	// Parse and validate times
+	startTime, err := time.Parse(time.RFC3339, req.StartTime)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid start time format")
+		return
+	}
+
+	endTime, err := time.Parse(time.RFC3339, req.EndTime)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid end time format")
+		return
+	}
+
+	// Update event
+	existingEvent.Title = req.Title
+	existingEvent.Description = req.Description
+	existingEvent.Location = req.Location
+	existingEvent.StartTime = startTime
+	existingEvent.EndTime = endTime
+
+	if err := h.EventService.Update(existingEvent); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to update event")
+		return
+	}
+
+	// Get updated event with creator info
+	updatedEvent, err := h.EventService.GetByID(eventID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get updated event")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Event updated successfully", map[string]interface{}{
+		"event": updatedEvent,
+	})
+}
+
+// DeleteGroupEvent handles deleting an event
+func (h *Handler) DeleteGroupEvent(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get event ID from URL
+	vars := mux.Vars(r)
+	eventID := vars["id"]
+
+	// Get the existing event
+	existingEvent, err := h.EventService.GetByID(eventID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	// Check if user is the creator or a group admin
+	isCreator := existingEvent.CreatorID == userID
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(existingEvent.GroupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isCreator && !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only event creator or group admin can delete this event")
+		return
+	}
+
+	// Delete event
+	if err := h.EventService.Delete(eventID, userID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete event")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Event deleted successfully", nil)
+}
+
 // GetGroupMembers handles retrieving members of a group
 func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
 	// Get group ID from URL
@@ -879,6 +1037,25 @@ func (h *Handler) ApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get group information for notification
+	group, err := h.GroupService.GetByID(groupID, currentUserID)
+	if err != nil {
+		// Log error but don't fail the request
+	} else {
+		// Create notification for the user whose request was approved
+		notification := &models.Notification{
+			UserID:   req.UserID,
+			SenderID: currentUserID,
+			Type:     models.NotificationTypeGroupJoinApproved,
+			Content:  "approved your request to join the group",
+			Data:     `{"groupId":"` + groupID + `","groupName":"` + group.Name + `"}`,
+		}
+
+		if err := h.NotificationService.Create(notification); err != nil {
+			// Log error but don't fail the request
+		}
+	}
+
 	utils.RespondWithSuccess(w, http.StatusOK, "Join request approved successfully", nil)
 }
 
@@ -928,10 +1105,29 @@ func (h *Handler) RejectJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete the request (reject it)
-	if err := h.GroupMemberService.Delete(groupID, req.UserID); err != nil {
+	// Update status to rejected
+	if err := h.GroupMemberService.UpdateStatus(member.ID, models.GroupMemberStatusRejected); err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to reject request")
 		return
+	}
+
+	// Get group information for notification
+	group, err := h.GroupService.GetByID(groupID, currentUserID)
+	if err != nil {
+		// Log error but don't fail the request
+	} else {
+		// Create notification for the user whose request was rejected
+		notification := &models.Notification{
+			UserID:   req.UserID,
+			SenderID: currentUserID,
+			Type:     models.NotificationTypeGroupJoinRejected,
+			Content:  "declined your request to join the group",
+			Data:     `{"groupId":"` + groupID + `","groupName":"` + group.Name + `"}`,
+		}
+
+		if err := h.NotificationService.Create(notification); err != nil {
+			// Log error but don't fail the request
+		}
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "Join request rejected successfully", nil)
@@ -1676,4 +1872,118 @@ func (h *Handler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithSuccess(w, http.StatusCreated, "Message sent successfully", map[string]interface{}{
 		"message": message,
 	})
+}
+
+// DeleteGroupPost handles deleting a group post
+func (h *Handler) DeleteGroupPost(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and post ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["groupId"]
+	postID := vars["postId"]
+
+	// Check if user is a group member
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check group membership")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusForbidden, "You must be a group member to delete posts")
+		return
+	}
+
+	// Get the post to check ownership
+	post, err := h.PostService.GetByID(postID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Check if user is the post author or a group admin
+	isAuthor := post.UserID == userID
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isAuthor && !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only post author or group admin can delete this post")
+		return
+	}
+
+	// Delete the post
+	if err := h.PostService.Delete(postID, userID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete post")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Post deleted successfully", nil)
+}
+
+// RemoveGroupMember handles removing a member from a group
+func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context (the admin performing the action)
+	adminUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and user ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+	userToRemoveID := vars["userId"]
+
+	// Check if the admin is actually a group admin
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, adminUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can remove members")
+		return
+	}
+
+	// Check if the user to remove is a group member
+	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userToRemoveID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check membership status")
+		return
+	}
+
+	if !isMember {
+		utils.RespondWithError(w, http.StatusBadRequest, "User is not a member of this group")
+		return
+	}
+
+	// Prevent removing the group creator
+	group, err := h.GroupService.GetByID(groupID, adminUserID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get group details")
+		return
+	}
+
+	if group.CreatorID == userToRemoveID {
+		utils.RespondWithError(w, http.StatusForbidden, "Cannot remove the group creator")
+		return
+	}
+
+	// Remove the member
+	if err := h.GroupMemberService.Delete(groupID, userToRemoveID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to remove member")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Member removed successfully", nil)
 }
