@@ -1,9 +1,17 @@
 package websocket
 
+import (
+	"encoding/json"
+	"log"
+)
+
 // Hub maintains the set of active clients and broadcasts messages to them
 type Hub struct {
 	// Registered clients by room
 	Rooms map[string]map[*Client]bool
+
+	// Online users by user ID
+	OnlineUsers map[string]*Client
 
 	// Inbound messages to broadcast
 	Broadcast chan *Broadcast
@@ -31,10 +39,11 @@ type Registration struct {
 // NewHub creates a new hub
 func NewHub() *Hub {
 	return &Hub{
-		Rooms:      make(map[string]map[*Client]bool),
-		Broadcast:  make(chan *Broadcast),
-		Register:   make(chan *Registration),
-		Unregister: make(chan *Client),
+		Rooms:       make(map[string]map[*Client]bool),
+		OnlineUsers: make(map[string]*Client),
+		Broadcast:   make(chan *Broadcast),
+		Register:    make(chan *Registration),
+		Unregister:  make(chan *Client),
 	}
 }
 
@@ -50,7 +59,17 @@ func (h *Hub) Run() {
 			// Add the client to the room
 			h.Rooms[registration.RoomID][registration.Client] = true
 
+			// Track user as online
+			h.OnlineUsers[registration.Client.UserID] = registration.Client
+			h.broadcastUserPresence(registration.Client.UserID, "online")
+
 		case client := <-h.Unregister:
+			// Remove user from online users
+			if _, ok := h.OnlineUsers[client.UserID]; ok {
+				delete(h.OnlineUsers, client.UserID)
+				h.broadcastUserPresence(client.UserID, "offline")
+			}
+
 			// Remove the client from all rooms
 			for roomID, room := range h.Rooms {
 				if _, ok := room[client]; ok {
@@ -98,6 +117,84 @@ func (h *Hub) Run() {
 					if len(room) == 0 {
 						delete(h.Rooms, broadcast.RoomID)
 					}
+				}
+			}
+		}
+	}
+}
+
+// broadcastUserPresence broadcasts user online/offline status to all connected clients
+func (h *Hub) broadcastUserPresence(userID, status string) {
+	presenceData := map[string]interface{}{
+		"userId": userID,
+		"status": status,
+	}
+
+	message := map[string]interface{}{
+		"type":    "user_presence",
+		"payload": presenceData,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling user presence message: %v", err)
+		return
+	}
+
+	// Broadcast to all users in the default room (all connected users)
+	if room, ok := h.Rooms[""]; ok {
+		for client := range room {
+			select {
+			case client.Send <- data:
+			default:
+				// Client's send buffer is full, remove them
+				select {
+				case <-client.Send:
+					// Channel is already closed
+				default:
+					close(client.Send)
+				}
+				delete(room, client)
+			}
+		}
+	}
+}
+
+// broadcastTypingStatus broadcasts typing status to users in a specific room
+func (h *Hub) broadcastTypingStatus(roomID, userID string, isTyping bool) {
+	typingData := map[string]interface{}{
+		"roomId":   roomID,
+		"userId":   userID,
+		"isTyping": isTyping,
+	}
+
+	message := map[string]interface{}{
+		"type":    "typing_status",
+		"payload": typingData,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling typing status message: %v", err)
+		return
+	}
+
+	// Broadcast to users in the specific room
+	if room, ok := h.Rooms[roomID]; ok {
+		for client := range room {
+			// Don't send typing status back to the user who is typing
+			if client.UserID != userID {
+				select {
+				case client.Send <- data:
+				default:
+					// Client's send buffer is full, remove them
+					select {
+					case <-client.Send:
+						// Channel is already closed
+					default:
+						close(client.Send)
+					}
+					delete(room, client)
 				}
 			}
 		}
