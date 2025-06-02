@@ -123,8 +123,9 @@
   font-size: 0.9rem;
   color: #050505;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -147,7 +148,7 @@
     align-items: flex-start;
     gap: 1rem;
   }
-  
+
   .groupsGrid {
     grid-template-columns: 1fr;
   }
