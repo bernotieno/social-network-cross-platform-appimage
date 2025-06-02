@@ -47,7 +47,7 @@ export default function CreateGroup() {
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert('Group name is required');
+      showError('Group name is required', 'Validation Error');
       return;
     }
 
