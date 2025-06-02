@@ -47,7 +47,7 @@ export const getFallbackAvatar = (user) => {
   // Create a simple SVG avatar with the user's initial
   const svg = `
     <svg width="120" height="120" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="60" cy="60" r="60" fill="#1877f2"/>
+      <circle cx="60" cy="60" r="60" fill="#10b981"/>
       <text x="60" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="bold"
             text-anchor="middle" fill="white">${initial}</text>
     </svg>
