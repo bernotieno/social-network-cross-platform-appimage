@@ -165,6 +165,7 @@ export const groupAPI = {
   joinGroup: (groupId) => api.post(`/groups/${groupId}/join`),
   leaveGroup: (groupId) => api.delete(`/groups/${groupId}/join`),
   getGroupMembers: (groupId) => api.get(`/groups/${groupId}/members`),
+  removeGroupMember: (groupId, userId) => api.delete(`/groups/${groupId}/members/${userId}`),
   getGroupPendingRequests: (groupId) => api.get(`/groups/${groupId}/pending-requests`),
   approveJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/approve-request`, { userId }),
   rejectJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/reject-request`, { userId }),
@@ -179,8 +180,11 @@ export const groupAPI = {
       },
     });
   },
+  deleteGroupPost: (groupId, postId) => api.delete(`/groups/${groupId}/posts/${postId}`),
   createGroupEvent: (groupId, eventData) => api.post(`/groups/${groupId}/events`, eventData),
   getGroupEvents: (groupId) => api.get(`/groups/${groupId}/events`),
+  updateGroupEvent: (eventId, eventData) => api.put(`/groups/events/${eventId}`, eventData),
+  deleteGroupEvent: (eventId) => api.delete(`/groups/events/${eventId}`),
   respondToEvent: (eventId, response) => api.post(`/groups/events/${eventId}/respond`, { response }),
   getGroupMessages: (groupId) => api.get(`/groups/${groupId}/messages`),
   sendGroupMessage: (groupId, content) => api.post(`/groups/${groupId}/messages`, { content }),
@@ -206,6 +210,7 @@ export const messageAPI = {
   sendMessage: (receiverId, content) => api.post('/messages', { receiverId, content }),
   sendGroupMessage: (groupId, content) => api.post('/messages', { groupId, content }),
   getMessages: (userId) => api.get(`/messages/${userId}`),
+  getOnlineUsers: () => api.get('/messages/online-users'),
 };
 
 export default api;
