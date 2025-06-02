@@ -14,14 +14,16 @@ import (
 type NotificationType string
 
 const (
-	NotificationTypeFollowRequest    NotificationType = "follow_request"
-	NotificationTypeFollowAccepted   NotificationType = "follow_accepted"
-	NotificationTypeNewFollower      NotificationType = "new_follower"
-	NotificationTypePostLike         NotificationType = "post_like"
-	NotificationTypePostComment      NotificationType = "post_comment"
-	NotificationTypeGroupInvite      NotificationType = "group_invite"
-	NotificationTypeGroupJoinRequest NotificationType = "group_join_request"
-	NotificationTypeEventInvite      NotificationType = "event_invite"
+	NotificationTypeFollowRequest     NotificationType = "follow_request"
+	NotificationTypeFollowAccepted    NotificationType = "follow_accepted"
+	NotificationTypeNewFollower       NotificationType = "new_follower"
+	NotificationTypePostLike          NotificationType = "post_like"
+	NotificationTypePostComment       NotificationType = "post_comment"
+	NotificationTypeGroupInvite       NotificationType = "group_invite"
+	NotificationTypeGroupJoinRequest  NotificationType = "group_join_request"
+	NotificationTypeGroupJoinApproved NotificationType = "group_join_approved"
+	NotificationTypeGroupJoinRejected NotificationType = "group_join_rejected"
+	NotificationTypeEventInvite       NotificationType = "event_invite"
 )
 
 // Notification represents a notification
