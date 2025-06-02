@@ -225,3 +225,22 @@ export const subscribeToCommentDeletions = (callback) => {
   on('comment_deleted', callback);
   return () => off('comment_deleted', callback);
 };
+
+/**
+ * Subscribe to typing status updates
+ * @param {function} callback - Function to call when typing status changes
+ * @returns {function} - Function to unsubscribe
+ */
+export const subscribeToTypingStatus = (callback) => {
+  on('typing_status', callback);
+  return () => off('typing_status', callback);
+};
+
+/**
+ * Send typing status to a chat room
+ * @param {string} roomId - Room ID to send typing status to
+ * @param {boolean} isTyping - Whether the user is typing
+ */
+export const sendTypingStatus = (roomId, isTyping) => {
+  emit('typing_status', { roomId, isTyping });
+};
