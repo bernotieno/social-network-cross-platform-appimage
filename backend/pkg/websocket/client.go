@@ -230,6 +230,20 @@ func (c *Client) ReadPump() {
 					Sender:  c,
 				}
 			}
+		case "typing_status":
+			// Handle typing status
+			if msg.RoomID != "" {
+				// Extract typing status
+				var isTyping bool
+				if contentMap, ok := msg.Content.(map[string]interface{}); ok {
+					if typingStatus, ok := contentMap["isTyping"].(bool); ok {
+						isTyping = typingStatus
+					}
+				}
+
+				// Broadcast typing status to other users in the room
+				c.Hub.broadcastTypingStatus(msg.RoomID, c.UserID, isTyping)
+			}
 		}
 	}
 }
