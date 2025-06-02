@@ -13,7 +13,7 @@ import Button from '@/components/Button';
 import { ConfirmModal, AlertModal } from '@/components/Modal';
 import styles from '@/styles/Post.module.css';
 
-const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null }) => {
+const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, isGroupAdmin = false }) => {
   const { user } = useAuth();
   const { showSuccess } = useAlert();
   const [isLiked, setIsLiked] = useState(post.isLikedByCurrentUser || false);
@@ -35,6 +35,8 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null })
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isOwnPost = user?.id === post.author.id;
+  const canDeletePost = isOwnPost || (isGroupPost && isGroupAdmin);
+  const canEditPost = isOwnPost; // Only post author can edit
 
   const handleLikeToggle = async () => {
     try {
@@ -132,7 +134,13 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null })
   const confirmDeletePost = async () => {
     try {
       setIsDeleting(true);
-      await postAPI.deletePost(post.id);
+
+      if (isGroupPost && groupId) {
+        await groupAPI.deleteGroupPost(groupId, post.id);
+      } else {
+        await postAPI.deletePost(post.id);
+      }
+
       if (onDelete) {
         onDelete(post.id);
       }
@@ -300,7 +308,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null })
           </div>
         </Link>
 
-        {isOwnPost && (
+        {(canEditPost || canDeletePost) && (
           <div className={`${styles.postActions} post-dropdown`}>
             <button
               className={styles.dropdownToggle}
@@ -313,18 +321,22 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null })
 
             {showDropdown && (
               <div className={styles.dropdownMenu}>
-                <button
-                  className={styles.dropdownItem}
-                  onClick={handleEditPost}
-                >
-                  ✏️ Edit Post
-                </button>
-                <button
-                  className={styles.dropdownItem}
-                  onClick={handleDeletePost}
-                >
-                  🗑️ Delete Post
-                </button>
+                {canEditPost && (
+                  <button
+                    className={styles.dropdownItem}
+                    onClick={handleEditPost}
+                  >
+                    ✏️ Edit Post
+                  </button>
+                )}
+                {canDeletePost && (
+                  <button
+                    className={styles.dropdownItem}
+                    onClick={handleDeletePost}
+                  >
+                    🗑️ Delete Post
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -476,7 +488,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null })
                           {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                         </span>
 
-                        {(user?.id === comment.author.id || isOwnPost) && (
+                        {(user?.id === comment.author.id || isOwnPost || (isGroupPost && isGroupAdmin)) && (
                           <button
                             className={styles.deleteCommentButton}
                             onClick={() => handleDeleteComment(comment.id)}
