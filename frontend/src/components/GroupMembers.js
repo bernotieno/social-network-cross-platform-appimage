@@ -146,6 +146,32 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
     }
   };
 
+  const handleRemoveMember = async (userId, userName) => {
+    if (!window.confirm(`Are you sure you want to remove ${userName} from this group? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await groupAPI.removeGroupMember(groupId, userId);
+
+      // Remove from members list
+      setMembers(prev => prev.filter(member => {
+        const memberUserId = member.userId || member.user?.id || member.id;
+        return memberUserId !== userId;
+      }));
+
+      showSuccess('Member removed successfully!');
+
+      // Notify parent component about membership change
+      if (onMembershipChange) {
+        onMembershipChange();
+      }
+    } catch (error) {
+      console.error('Error removing member:', error);
+      showError(error.response?.data?.message || 'Failed to remove member. Please try again.');
+    }
+  };
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       searchUsers(searchQuery);
@@ -241,6 +267,15 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                   <div className={styles.memberRole}>
                     {member.role === 'admin' && (
                       <span className={styles.adminBadge}>Admin</span>
+                    )}
+                    {isGroupAdmin && memberUser.id !== user?.id && (
+                      <Button
+                        variant="danger"
+                        size="small"
+                        onClick={() => handleRemoveMember(memberUser.id, memberUser.fullName)}
+                      >
+                        Remove
+                      </Button>
                     )}
                   </div>
                 </div>
