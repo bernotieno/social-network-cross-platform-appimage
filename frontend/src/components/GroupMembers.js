@@ -260,7 +260,12 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                       )}
                     </div>
                     <div className={styles.memberInfo}>
-                      <h3 className={styles.memberName}>{memberUser.fullName}</h3>
+                      <div className={styles.memberNameRow}>
+                        <h3 className={styles.memberName}>{memberUser.fullName}</h3>
+                        <span className={`${styles.privacyTag} ${memberUser.isPrivate ? styles.privateTag : styles.publicTag}`}>
+                          {memberUser.isPrivate ? '🔒' : '🌐'}
+                        </span>
+                      </div>
                       <p className={styles.memberUsername}>@{memberUser.username}</p>
                     </div>
                   </Link>
@@ -321,7 +326,12 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                       )}
                     </div>
                     <div className={styles.requestInfo}>
-                      <h3 className={styles.requestName}>{requestUser.fullName}</h3>
+                      <div className={styles.requestNameRow}>
+                        <h3 className={styles.requestName}>{requestUser.fullName}</h3>
+                        <span className={`${styles.privacyTag} ${requestUser.isPrivate ? styles.privateTag : styles.publicTag}`}>
+                          {requestUser.isPrivate ? '🔒' : '🌐'}
+                        </span>
+                      </div>
                       <p className={styles.requestUsername}>@{requestUser.username}</p>
                     </div>
                   </Link>
@@ -406,7 +416,12 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                         )}
                       </div>
                       <div>
-                        <h4 className={styles.userName}>{user.fullName}</h4>
+                        <div className={styles.userNameRow}>
+                          <h4 className={styles.userName}>{user.fullName}</h4>
+                          <span className={`${styles.privacyTag} ${user.isPrivate ? styles.privateTag : styles.publicTag}`}>
+                            {user.isPrivate ? '🔒' : '🌐'}
+                          </span>
+                        </div>
                         <p className={styles.userUsername}>@{user.username}</p>
                       </div>
                     </div>
