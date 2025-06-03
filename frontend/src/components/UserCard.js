@@ -70,9 +70,14 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
         </div>
 
         <div className={styles.userInfo}>
-          <h3 className={styles.userName}>
-            {user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username}
-          </h3>
+          <div className={styles.userNameRow}>
+            <h3 className={styles.userName}>
+              {user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username}
+            </h3>
+            <span className={`${styles.privacyTag} ${user.isPrivate ? styles.privateTag : styles.publicTag}`}>
+              {user.isPrivate ? '🔒' : '🌐'}
+            </span>
+          </div>
           <p className={styles.userUsername}>@{user.username}</p>
           {user.bio && (
             <p className={styles.userBio}>{user.bio}</p>
