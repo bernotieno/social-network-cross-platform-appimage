@@ -471,7 +471,12 @@ export default function ProfilePage() {
               <h1 className={styles.profileName}>
                 {profile.user.fullName || `${profile.user.firstName || ''} ${profile.user.lastName || ''}`.trim() || profile.user.username}
               </h1>
-              <p className={styles.profileUsername}>@{profile.user.username}</p>
+              <div className={styles.profileUsernameRow}>
+                <p className={styles.profileUsername}>@{profile.user.username}</p>
+                <span className={`${styles.privacyTag} ${profile.user.isPrivate ? styles.privateTag : styles.publicTag}`}>
+                  {profile.user.isPrivate ? '🔒 Private' : '🌐 Public'}
+                </span>
+              </div>
 
               {profile.user.bio && (
                 <p className={styles.profileBio}>{profile.user.bio}</p>
