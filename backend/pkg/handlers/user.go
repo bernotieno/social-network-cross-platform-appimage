@@ -85,19 +85,6 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	// Remove password from response
 	user.Password = ""
 
-	// Get follower and following counts
-	followersCount, err := h.FollowService.GetFollowersCount(userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get followers count")
-		return
-	}
-
-	followingCount, err := h.FollowService.GetFollowingCount(userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get following count")
-		return
-	}
-
 	// Check if current user is following this user
 	isFollowing := false
 	if currentUserID != "" && currentUserID != userID {
@@ -108,11 +95,70 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if the viewer is authorized to see full profile data
+	isAuthorized := true
+	if user.IsPrivate && currentUserID != userID {
+		// For private profiles, only followers can see full data
+		isAuthorized = isFollowing
+	}
+
+	// Create filtered user data based on authorization
+	var userData map[string]interface{}
+	if isAuthorized {
+		// Full profile data for authorized viewers
+		userData = map[string]interface{}{
+			"id":             user.ID,
+			"username":       user.Username,
+			"email":          user.Email,
+			"fullName":       user.FullName,
+			"firstName":      user.FirstName,
+			"lastName":       user.LastName,
+			"dateOfBirth":    user.DateOfBirth,
+			"bio":            user.Bio,
+			"profilePicture": user.ProfilePicture,
+			"coverPhoto":     user.CoverPhoto,
+			"isPrivate":      user.IsPrivate,
+			"createdAt":      user.CreatedAt,
+			"updatedAt":      user.UpdatedAt,
+		}
+	} else {
+		// Limited profile data for unauthorized viewers of private profiles
+		userData = map[string]interface{}{
+			"id":             user.ID,
+			"username":       user.Username,
+			"fullName":       user.FullName,
+			"profilePicture": user.ProfilePicture,
+			"coverPhoto":     user.CoverPhoto,
+			"isPrivate":      user.IsPrivate,
+			"createdAt":      user.CreatedAt,
+		}
+	}
+
+	// Get follower and following counts (only for authorized viewers)
+	var followersCount, followingCount int
+	if isAuthorized {
+		followersCount, err = h.FollowService.GetFollowersCount(userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get followers count")
+			return
+		}
+
+		followingCount, err = h.FollowService.GetFollowingCount(userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get following count")
+			return
+		}
+	}
+
 	// Create response
 	response := map[string]interface{}{
-		"user":           user,
-		"followersCount": followersCount,
-		"followingCount": followingCount,
+		"user": userData,
+	}
+
+	// Add stats only for authorized viewers
+	if isAuthorized {
+		response["followersCount"] = followersCount
+		response["followingCount"] = followingCount
 	}
 
 	// Add follow status if authenticated
