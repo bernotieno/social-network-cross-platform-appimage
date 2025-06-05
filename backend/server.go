@@ -130,16 +130,16 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 
 	// User routes
 	users := api.PathPrefix("/users").Subrouter()
-	users.HandleFunc("", h.GetUsers).Methods("GET")
-	users.HandleFunc("/search", h.GetUsers).Methods("GET") // Reuse GetUsers for search functionality
-	users.HandleFunc("/{id}", h.GetUser).Methods("GET")
+	users.HandleFunc("", middleware.AuthMiddleware(h.GetUsers)).Methods("GET")
+	users.HandleFunc("/search", middleware.AuthMiddleware(h.GetUsers)).Methods("GET") // Reuse GetUsers for search functionality
+	users.HandleFunc("/{id}", middleware.AuthMiddleware(h.GetUser)).Methods("GET")
 	users.HandleFunc("/profile", middleware.AuthMiddleware(h.UpdateProfile)).Methods("PUT")
 	users.HandleFunc("/avatar", middleware.AuthMiddleware(h.UploadAvatar)).Methods("POST")
 	users.HandleFunc("/cover", middleware.AuthMiddleware(h.UploadCoverPhoto)).Methods("POST")
 	users.HandleFunc("/{id}/follow", middleware.AuthMiddleware(h.FollowUser)).Methods("POST")
 	users.HandleFunc("/{id}/follow", middleware.AuthMiddleware(h.UnfollowUser)).Methods("DELETE")
-	users.HandleFunc("/{id}/followers", h.GetFollowers).Methods("GET")
-	users.HandleFunc("/{id}/following", h.GetFollowing).Methods("GET")
+	users.HandleFunc("/{id}/followers", middleware.AuthMiddleware(h.GetFollowers)).Methods("GET")
+	users.HandleFunc("/{id}/following", middleware.AuthMiddleware(h.GetFollowing)).Methods("GET")
 	users.HandleFunc("/follow-requests", middleware.AuthMiddleware(h.GetFollowRequests)).Methods("GET")
 	users.HandleFunc("/follow-requests/{id}", middleware.AuthMiddleware(h.RespondToFollowRequest)).Methods("PUT")
 
@@ -147,13 +147,13 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	posts := api.PathPrefix("/posts").Subrouter()
 	posts.HandleFunc("", middleware.AuthMiddleware(h.CreatePost)).Methods("POST")
 	posts.HandleFunc("/feed", middleware.AuthMiddleware(h.GetFeed)).Methods("GET")
-	posts.HandleFunc("/user/{id}", h.GetUserPosts).Methods("GET")
-	posts.HandleFunc("/{id}", h.GetPost).Methods("GET")
+	posts.HandleFunc("/user/{id}", middleware.AuthMiddleware(h.GetUserPosts)).Methods("GET")
+	posts.HandleFunc("/{id}", middleware.AuthMiddleware(h.GetPost)).Methods("GET")
 	posts.HandleFunc("/{id}", middleware.AuthMiddleware(h.UpdatePost)).Methods("PUT")
 	posts.HandleFunc("/{id}", middleware.AuthMiddleware(h.DeletePost)).Methods("DELETE")
 	posts.HandleFunc("/{id}/like", middleware.AuthMiddleware(h.LikePost)).Methods("POST")
 	posts.HandleFunc("/{id}/like", middleware.AuthMiddleware(h.UnlikePost)).Methods("DELETE")
-	posts.HandleFunc("/{id}/comments", h.GetComments).Methods("GET")
+	posts.HandleFunc("/{id}/comments", middleware.AuthMiddleware(h.GetComments)).Methods("GET")
 	posts.HandleFunc("/{id}/comments", middleware.AuthMiddleware(h.AddComment)).Methods("POST")
 	posts.HandleFunc("/{postId}/comments/{commentId}", middleware.AuthMiddleware(h.DeleteComment)).Methods("DELETE")
 

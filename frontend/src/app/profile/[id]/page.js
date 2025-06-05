@@ -478,6 +478,9 @@ export default function ProfilePage() {
                 </span>
               </div>
 
+              {profile.user.email && (
+                <p className={styles.profileBio}>{profile.user.email}</p>
+              )}
               {profile.user.bio && (
                 <p className={styles.profileBio}>{profile.user.bio}</p>
               )}
