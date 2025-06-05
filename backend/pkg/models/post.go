@@ -152,13 +152,20 @@ func (s *PostService) Delete(id, userID string) error {
 
 // GetUserPosts retrieves posts by a user
 func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset int) ([]*Post, error) {
-	// Simplified version - for now, show public posts to everyone and all posts to the owner
-	var rows *sql.Rows
-	var err error
+	// First, check if the user has a private profile
+	var isPrivate bool
+	err := s.DB.QueryRow("SELECT is_private FROM users WHERE id = ?", userID).Scan(&isPrivate)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("failed to check user privacy: %w", err)
+	}
 
-	if userID == currentUserID {
-		// User can see all their own posts
-		rows, err = s.DB.Query(`
+	// If user is viewing their own posts or the profile is public, proceed normally
+	if userID == currentUserID || !isPrivate {
+		// User can see all their own posts or public profile posts
+		rows, err := s.DB.Query(`
 			SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
 				u.id, u.username, u.full_name, u.profile_picture,
 				(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
@@ -170,9 +177,31 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 			ORDER BY p.created_at DESC
 			LIMIT ? OFFSET ?
 		`, currentUserID, userID, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user posts: %w", err)
+		}
+		defer rows.Close()
+		
+		return s.scanPosts(rows)
 	} else {
-		// Others can see public posts
-		rows, err = s.DB.Query(`
+		// For private profiles, check if the current user is a follower
+		var isFollowing bool
+		err := s.DB.QueryRow(`
+			SELECT COUNT(*) > 0
+			FROM follows
+			WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+		`, currentUserID, userID).Scan(&isFollowing)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check follow status: %w", err)
+		}
+
+		if !isFollowing {
+			// Not a follower, return empty list or error based on your preference
+			return []*Post{}, nil // Or return nil, errors.New("not authorized to view posts")
+		}
+
+		// Is a follower, can see posts
+		rows, err := s.DB.Query(`
 			SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
 				u.id, u.username, u.full_name, u.profile_picture,
 				(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
@@ -180,17 +209,21 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 				(SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) as is_liked
 			FROM posts p
 			JOIN users u ON p.user_id = u.id
-			WHERE p.user_id = ? AND p.visibility = ?
+			WHERE p.user_id = ?
 			ORDER BY p.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, userID, PostVisibilityPublic, limit, offset)
+		`, currentUserID, userID, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user posts: %w", err)
+		}
+		defer rows.Close()
+		
+		return s.scanPosts(rows)
 	}
+}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user posts: %w", err)
-	}
-	defer rows.Close()
-
+// Helper method to scan posts from rows
+func (s *PostService) scanPosts(rows *sql.Rows) ([]*Post, error) {
 	var posts []*Post
 	for rows.Next() {
 		post := &Post{User: &User{}}
