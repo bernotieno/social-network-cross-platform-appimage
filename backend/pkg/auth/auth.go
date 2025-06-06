@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/bernaotieno/social-network/backend/pkg/models"
@@ -21,6 +23,7 @@ const (
 
 // Store is the session store
 var Store *sessions.CookieStore
+var IsProduction = os.Getenv("SOCIAL_NETWORK_PRODUCTION")
 
 // Initialize initializes the auth package
 func Initialize(secret []byte) {
@@ -29,13 +32,13 @@ func Initialize(secret []byte) {
 		Path:     "/",
 		MaxAge:   int(SessionDuration.Seconds()),
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   IsProduction == "true",
 		SameSite: http.SameSiteLaxMode,
 	}
 }
 
 // CreateSession creates a new session for a user
-func CreateSession(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request) (string, error) {
+func CreateSession(_ context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request) (string, error) {
 	// Create a new session in the database
 	sessionService := models.NewSessionService(db)
 	session, err := sessionService.Create(userID, SessionDuration)
@@ -64,7 +67,7 @@ func CreateSession(ctx context.Context, db *sql.DB, userID string, w http.Respon
 		return "", fmt.Errorf("failed to save session cookie: %w", err)
 	}
 
-	log.Printf("Session created successfully: %s for user: %s", session.ID, userID)
+	//log.Printf("Session created successfully: %s for user: %s", session.ID, userID)
 	return session.ID, nil
 }
 
@@ -80,13 +83,12 @@ func GetSessionCookie(r *http.Request) (string, error) {
 		return "", errors.New("session cookie is empty")
 	}
 
-	// Get session ID from cookie
 	sessionIDValue, exists := session.Values["session_id"]
+	//fmt.Printf("sessionIDValue %v\nexist %v\n", sessionIDValue, exists)
 	if !exists {
 		return "", errors.New("session_id key not found in cookie")
 	}
 
-	// Type assert to string
 	sessionID, ok := sessionIDValue.(string)
 	if !ok {
 		return "", fmt.Errorf("session_id is not a string, got type %T", sessionIDValue)
@@ -101,7 +103,7 @@ func GetSessionCookie(r *http.Request) (string, error) {
 }
 
 // ValidateSession validates a session and returns the user ID
-func ValidateSession(ctx context.Context, db *sql.DB, sessionID string) (string, error) {
+func ValidateSession(_ context.Context, db *sql.DB, sessionID string) (string, error) {
 	// Validate session in the database
 	sessionService := models.NewSessionService(db)
 	session, err := sessionService.GetByID(sessionID)
@@ -113,7 +115,7 @@ func ValidateSession(ctx context.Context, db *sql.DB, sessionID string) (string,
 }
 
 // ClearSession clears the session cookie and removes the session from the database
-func ClearSession(ctx context.Context, db *sql.DB, w http.ResponseWriter, r *http.Request) error {
+func ClearSession(_ context.Context, db *sql.DB, w http.ResponseWriter, r *http.Request) error {
 	// Try to get session ID from cookie
 	sessionID, err := GetSessionCookie(r)
 	if err == nil {
@@ -140,6 +142,5 @@ func ClearSession(ctx context.Context, db *sql.DB, w http.ResponseWriter, r *htt
 		return fmt.Errorf("failed to clear session cookie: %w", err)
 	}
 
-	log.Printf("Session cleared successfully")
 	return nil
 }

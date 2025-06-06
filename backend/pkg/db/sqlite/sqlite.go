@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -41,9 +42,11 @@ func NewDB(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
+var sqlDriver = "sqlite3"
+
 // RunMigrations runs all database migrations
 func RunMigrations(dbPath, migrationsPath string) error {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open(sqlDriver, dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database for migrations: %w", err)
 	}
@@ -65,7 +68,7 @@ func RunMigrations(dbPath, migrationsPath string) error {
 	}
 
 	// Run migrations
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
