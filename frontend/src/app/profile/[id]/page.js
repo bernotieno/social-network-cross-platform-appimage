@@ -186,6 +186,20 @@ export default function ProfilePage() {
   const handleProfilePicChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type and size
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
+
+      if (!allowedTypes.includes(file.type)) {
+        console.error('Invalid file type. Please select JPEG, PNG, or GIF.');
+        return;
+      }
+
+      if (file.size > maxSize) {
+        console.error('File size too large. Please select a file under 5MB.');
+        return;
+      }
+
       setProfilePicFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -198,6 +212,20 @@ export default function ProfilePage() {
   const handleCoverPhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type and size
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
+
+      if (!allowedTypes.includes(file.type)) {
+        console.error('Invalid file type. Please select JPEG, PNG, or GIF.');
+        return;
+      }
+
+      if (file.size > maxSize) {
+        console.error('File size too large. Please select a file under 5MB.');
+        return;
+      }
+
       setCoverPhotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -459,7 +487,7 @@ export default function ProfilePage() {
                   <span>📷</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/gif"
                     onChange={handleProfilePicChange}
                     style={{ display: 'none' }}
                   />
@@ -720,7 +748,7 @@ export default function ProfilePage() {
                 <input
                   type="file"
                   id="profilePic"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleProfilePicChange}
                   className={styles.fileInput}
                 />
@@ -736,7 +764,7 @@ export default function ProfilePage() {
                 <input
                   type="file"
                   id="coverPhoto"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleCoverPhotoChange}
                   className={styles.fileInput}
                 />

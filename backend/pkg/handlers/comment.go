@@ -81,16 +81,47 @@ func (h *Handler) AddComment(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	postID := vars["id"]
 
-	// Parse request body
-	var req AddCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
-		return
+	var content string
+	var imagePath string
+
+	// Check content type to determine how to parse the request
+	contentType := r.Header.Get("Content-Type")
+
+	if contentType == "application/json" {
+		// Parse JSON request body (for text-only comments)
+		var req AddCommentRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+		content = req.Content
+	} else {
+		// Parse multipart form (for comments with images)
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Failed to parse form")
+			return
+		}
+
+		// Get content from form
+		content = r.FormValue("content")
+
+		// Check if image was uploaded
+		file, header, err := r.FormFile("image")
+		if err == nil {
+			defer file.Close()
+
+			// Save image
+			imagePath, err = utils.SaveImage(file, header, "comments")
+			if err != nil {
+				utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		}
 	}
 
-	// Validate content
-	if req.Content == "" {
-		utils.RespondWithError(w, http.StatusBadRequest, "Content is required")
+	// Validate content (allow empty content if image is provided)
+	if content == "" && imagePath == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "Content or image is required")
 		return
 	}
 
@@ -105,7 +136,8 @@ func (h *Handler) AddComment(w http.ResponseWriter, r *http.Request) {
 	comment := &models.Comment{
 		PostID:  postID,
 		UserID:  userID,
-		Content: req.Content,
+		Content: content,
+		Image:   imagePath,
 	}
 
 	if err := h.CommentService.Create(comment); err != nil {
@@ -131,7 +163,7 @@ func (h *Handler) AddComment(w http.ResponseWriter, r *http.Request) {
 			SenderID: userID,
 			Type:     "post_comment",
 			Content:  "commented on your post",
-			Data:     `{"postId":"` + postID + `","comment":"` + req.Content + `"}`,
+			Data:     `{"postId":"` + postID + `","comment":"` + content + `"}`,
 		}
 
 		if err := h.NotificationService.Create(notification); err != nil {

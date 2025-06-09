@@ -162,6 +162,11 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 		return nil, fmt.Errorf("failed to check user privacy: %w", err)
 	}
 
+	// Handle empty currentUserID (unauthenticated users)
+	if currentUserID == "" {
+		currentUserID = "00000000-0000-0000-0000-000000000000" // Use a dummy UUID that won't match any real user
+	}
+
 	// If user is viewing their own posts or the profile is public, proceed normally
 	if userID == currentUserID || !isPrivate {
 		// User can see all their own posts or public profile posts
@@ -170,7 +175,7 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 				u.id, u.username, u.full_name, u.profile_picture,
 				(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
 				(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
-				(SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) as is_liked
+				COALESCE((SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?), 0) as is_liked
 			FROM posts p
 			JOIN users u ON p.user_id = u.id
 			WHERE p.user_id = ?
@@ -181,7 +186,7 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 			return nil, fmt.Errorf("failed to get user posts: %w", err)
 		}
 		defer rows.Close()
-		
+
 		return s.scanPosts(rows)
 	} else {
 		// For private profiles, check if the current user is a follower
@@ -206,7 +211,7 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 				u.id, u.username, u.full_name, u.profile_picture,
 				(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
 				(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
-				(SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) as is_liked
+				COALESCE((SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?), 0) as is_liked
 			FROM posts p
 			JOIN users u ON p.user_id = u.id
 			WHERE p.user_id = ?
@@ -217,7 +222,7 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 			return nil, fmt.Errorf("failed to get user posts: %w", err)
 		}
 		defer rows.Close()
-		
+
 		return s.scanPosts(rows)
 	}
 }

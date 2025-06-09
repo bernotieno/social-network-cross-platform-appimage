@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { postAPI, groupAPI } from '@/utils/api';
-import { getImageUrl } from '@/utils/images';
+import { getImageUrl, isGif, validateImageFile } from '@/utils/images';
 import { subscribeToPostLikes, subscribeToNewComments, subscribeToCommentDeletions } from '@/utils/socket';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
@@ -21,6 +21,8 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState(post.comments || []);
   const [newComment, setNewComment] = useState('');
+  const [commentImage, setCommentImage] = useState(null);
+  const [commentImagePreview, setCommentImagePreview] = useState(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
@@ -91,21 +93,65 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
     setShowComments(!showComments);
   };
 
+  const handleCommentImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        alert(validation.error);
+        return;
+      }
+
+      setCommentImage(file);
+
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCommentImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveCommentImage = () => {
+    setCommentImage(null);
+    setCommentImagePreview(null);
+  };
+
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
 
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && !commentImage) return;
 
     try {
       setIsSubmittingComment(true);
       let response;
-      if (isGroupPost && groupId) {
-        response = await groupAPI.addGroupPostComment(groupId, post.id, newComment);
+
+      if (commentImage) {
+        // Use FormData for image upload
+        const formData = new FormData();
+        formData.append('content', newComment);
+        formData.append('image', commentImage);
+
+        if (isGroupPost && groupId) {
+          response = await groupAPI.addGroupPostComment(groupId, post.id, formData);
+        } else {
+          response = await postAPI.addCommentWithImage(post.id, formData);
+        }
       } else {
-        response = await postAPI.addComment(post.id, newComment);
+        // Use JSON for text-only comments
+        if (isGroupPost && groupId) {
+          response = await groupAPI.addGroupPostComment(groupId, post.id, newComment);
+        } else {
+          response = await postAPI.addComment(post.id, newComment);
+        }
       }
+
       setComments(prev => [response.data.data.comment, ...prev]);
       setNewComment('');
+      setCommentImage(null);
+      setCommentImagePreview(null);
     } catch (error) {
       console.error('Error adding comment:', error);
     } finally {
@@ -391,12 +437,23 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
             <p className={styles.postText}>{currentContent}</p>
             {post.image && (
               <div className={styles.postImage}>
-                <Image
-                  src={getImageUrl(post.image)}
-                  alt="Post image"
-                  fill
-                  style={{ objectFit: 'cover' }}
-                />
+                {isGif(post.image) ? (
+                  // Use regular img tag for GIFs to preserve animation
+                  <img
+                    src={getImageUrl(post.image)}
+                    alt="Post image"
+                    className={styles.postImageElement}
+                    style={{ width: '100%', height: 'auto', maxHeight: '500px', objectFit: 'contain' }}
+                  />
+                ) : (
+                  // Use Next.js Image for static images
+                  <Image
+                    src={getImageUrl(post.image)}
+                    alt="Post image"
+                    fill
+                    style={{ objectFit: 'cover' }}
+                  />
+                )}
               </div>
             )}
           </>
@@ -437,22 +494,53 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
         {showComments && (
           <div className={styles.commentsSection}>
             <form onSubmit={handleCommentSubmit} className={styles.commentForm}>
-              <input
-                type="text"
-                placeholder="Write a comment..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                className={styles.commentInput}
-                disabled={isSubmittingComment}
-              />
-              <Button
-                type="submit"
-                variant="primary"
-                size="small"
-                disabled={isSubmittingComment || !newComment.trim()}
-              >
-                Post
-              </Button>
+              <div className={styles.commentInputContainer}>
+                <input
+                  type="text"
+                  placeholder="Write a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  className={styles.commentInput}
+                  disabled={isSubmittingComment}
+                />
+                <div className={styles.commentActions}>
+                  <label className={styles.commentImageUpload}>
+                    <span>📷</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif"
+                      onChange={handleCommentImageChange}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="small"
+                    disabled={isSubmittingComment || (!newComment.trim() && !commentImage)}
+                  >
+                    Post
+                  </Button>
+                </div>
+              </div>
+
+              {commentImagePreview && (
+                <div className={styles.commentImagePreview}>
+                  <img
+                    src={commentImagePreview}
+                    alt="Comment preview"
+                    className={styles.commentPreviewImage}
+                  />
+                  <button
+                    type="button"
+                    className={styles.removeCommentImage}
+                    onClick={handleRemoveCommentImage}
+                    title="Remove image"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </form>
 
             <div className={styles.commentsList}>
@@ -480,7 +568,29 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
                     <div className={styles.commentContent}>
                       <div className={styles.commentBubble}>
                         <h4 className={styles.commentAuthorName}>{comment.author.fullName}</h4>
-                        <p className={styles.commentText}>{comment.content}</p>
+                        {comment.content && (
+                          <p className={styles.commentText}>{comment.content}</p>
+                        )}
+                        {comment.image && (
+                          <div className={styles.commentImageContainer}>
+                            {isGif(comment.image) ? (
+                              <img
+                                src={getImageUrl(comment.image)}
+                                alt="Comment image"
+                                className={styles.commentImage}
+                              />
+                            ) : (
+                              <Image
+                                src={getImageUrl(comment.image)}
+                                alt="Comment image"
+                                width={200}
+                                height={150}
+                                className={styles.commentImage}
+                                style={{ objectFit: 'cover' }}
+                              />
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className={styles.commentMeta}>

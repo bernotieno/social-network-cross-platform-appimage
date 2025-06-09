@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { postAPI } from '@/utils/api';
-import { getImageUrl } from '@/utils/images';
+import { getImageUrl, validateImageFile, getFileTypeDisplayName } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -30,6 +30,14 @@ export default function CreatePost() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        setError(validation.error);
+        return;
+      }
+
+      setError(''); // Clear any previous errors
       setImage(file);
 
       // Create preview URL
@@ -134,14 +142,21 @@ export default function CreatePost() {
                   src={imagePreview}
                   alt="Preview"
                   className={styles.imagePreview}
+                  style={{ maxWidth: '100%', height: 'auto' }}
                 />
                 <button
                   type="button"
                   className={styles.removeImageButton}
                   onClick={handleRemoveImage}
+                  title="Remove image"
                 >
                   ✕
                 </button>
+                {image && (
+                  <div className={styles.fileTypeIndicator}>
+                    <span>📁 {getFileTypeDisplayName(image.type)}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -167,10 +182,10 @@ export default function CreatePost() {
                 <div className={styles.addToPostOptions}>
                   <label className={styles.imageUploadLabel}>
                     <span className={styles.imageIcon}>🖼️</span>
-                    <span>Photo</span>
+                    <span>Photo/GIF</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/jpg,image/png,image/gif"
                       onChange={handleImageChange}
                       className={styles.imageInput}
                     />

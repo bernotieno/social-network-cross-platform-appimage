@@ -138,6 +138,11 @@ export const postAPI = {
   unlikePost: (postId) => api.delete(`/posts/${postId}/like`),
   getComments: (postId) => api.get(`/posts/${postId}/comments`),
   addComment: (postId, content) => api.post(`/posts/${postId}/comments`, { content }),
+  addCommentWithImage: (postId, formData) => api.post(`/posts/${postId}/comments`, formData, {
+    headers: {
+      'Content-Type': undefined, // Let browser set multipart boundary
+    },
+  }),
   deleteComment: (postId, commentId) => api.delete(`/posts/${postId}/comments/${commentId}`),
 };
 
@@ -192,7 +197,19 @@ export const groupAPI = {
   likeGroupPost: (groupId, postId) => api.post(`/groups/${groupId}/posts/${postId}/like`),
   unlikeGroupPost: (groupId, postId) => api.delete(`/groups/${groupId}/posts/${postId}/like`),
   getGroupPostComments: (groupId, postId) => api.get(`/groups/${groupId}/posts/${postId}/comments`),
-  addGroupPostComment: (groupId, postId, content) => api.post(`/groups/${groupId}/posts/${postId}/comments`, { content }),
+  addGroupPostComment: (groupId, postId, content) => {
+    if (content instanceof FormData) {
+      // For image uploads
+      return api.post(`/groups/${groupId}/posts/${postId}/comments`, content, {
+        headers: {
+          'Content-Type': undefined, // Let browser set multipart boundary
+        },
+      });
+    } else {
+      // For text-only comments
+      return api.post(`/groups/${groupId}/posts/${postId}/comments`, { content });
+    }
+  },
   deleteGroupPostComment: (groupId, postId, commentId) => api.delete(`/groups/${groupId}/posts/${postId}/comments/${commentId}`),
 };
 
