@@ -203,6 +203,9 @@ export const notificationAPI = {
   markAllAsRead: () => api.put('/notifications/read-all'),
   deleteNotification: (notificationId) => api.delete(`/notifications/${notificationId}`),
   deleteAllNotifications: () => api.delete('/notifications/delete-all'),
+
+  // new
+  respondToFollow: (notificationId, accept) => api.post(`/notifications/${notificationId}/respond`, { accept })
 };
 
 // Message API calls

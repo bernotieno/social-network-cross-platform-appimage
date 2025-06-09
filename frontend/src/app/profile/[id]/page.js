@@ -17,6 +17,7 @@ export default function ProfilePage() {
 
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [postsCount, setPostsCount] = useState(0);
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [activeTab, setActiveTab] = useState('posts');
@@ -42,6 +43,11 @@ export default function ProfilePage() {
   const [coverPhotoPreview, setCoverPhotoPreview] = useState(null);
   const [updateMessage, setUpdateMessage] = useState(null);
 
+  // New states for private account features
+  const [followRequestStatus, setFollowRequestStatus] = useState(null); // 'pending', 'accepted', 'rejected', null
+  const [canViewContent, setCanViewContent] = useState(true); // Whether user can view posts/followers/following
+
+
   const isOwnProfile = currentUser?.id === id;
 
   useEffect(() => {
@@ -61,21 +67,7 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
-  // Remove automatic upload - we'll handle it in the form submission
-  // useEffect(() => {
-  //   if (profilePicFile && isOwnProfile) {
-  //     // Use a try-catch block to prevent unhandled promise rejections
-  //     (async () => {
-  //       try {
-  //         await uploadProfilePic();
-  //       } catch (error) {
-  //         console.error('Failed to upload profile picture:', error);
-  //         // Reset the file state on error
-  //         setProfilePicFile(null);
-  //       }
-  //     })();
-  //   }
-  // }, [profilePicFile, isOwnProfile]);
+
 
   const fetchProfileData = async () => {
     try {
@@ -83,46 +75,97 @@ export default function ProfilePage() {
 
       // Fetch user profile
       const profileResponse = await userAPI.getProfile(id);
-      setProfile(profileResponse.data.data);
+      const profileData = profileResponse.data.data;
+      setProfile(profileData);
+
+
+
+      // always set the counts (visible even for private accounts)
+      setFollowersCount(profileData.followersCount || 0);
+      setFollowingCount(profileData.followingCount || 0);
+      setPostsCount(profileData.postsCount || 0);
 
       // Check if current user is following this profile
       if (currentUser && !isOwnProfile) {
-        setIsFollowing(profileResponse.data.data.isFollowedByCurrentUser || false);
+        setIsFollowing(profileData.isFollowedByCurrentUser || false);
+        setFollowRequestStatus(profileData.followRequestStatus || null);
       }
 
-      // Set followers and following counts
-      setFollowersCount(profileResponse.data.data.followersCount || 0);
-      setFollowingCount(profileResponse.data.data.followingCount || 0);
+      // determine if user can view content
+      const canView = isOwnProfile ||
+      !profileData.user.isPrivate  ||
+      profileData.isFollowedByCurrentUser ||
+      profileData.followRequestStatus == 'accepted';
 
-      // Fetch user posts
-      const postsResponse = await postAPI.getPosts(id);
-      setPosts(postsResponse.data.data.posts || []);
-    } catch (error) {
-      console.error('Error fetching profile data:', error);
+      setCanViewContent(canView);
+
+      if (canView){
+        try {
+          const postsResponse = await postAPI.getPosts(id);
+          setPosts(postsResponse.data.data.posts || []);
+        }catch(error){
+          console.log("fetching posts: error fetching posts",error);
+          setPosts([]);
+        }
+      }else{
+        setPosts([]);
+      }
+
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleFollow = async () => {
+    console.log("handle follow....")
     try {
       if (isFollowing) {
+        // if the current user is following and presses unfollow: we unfollow
         await userAPI.unfollow(id);
         setIsFollowing(false);
         setFollowersCount(prev => prev - 1);
+        setFollowRequestStatus(null);
+
+        // if the users profile is private, hide content,posts,followers,following
+        if(profile.user.isPrivate){
+          setCanViewContent(false);
+          setPosts([]);
+          setFollowers([]);
+          setFollowing([]);
+        }
 
         // Remove current user from followers list if it's loaded
         if (followers.length > 0) {
           setFollowers(prev => prev.filter(follower => follower.id !== currentUser?.id));
         }
       } else {
-        await userAPI.follow(id);
-        setIsFollowing(true);
-        setFollowersCount(prev => prev + 1);
 
-        // Add current user to followers list if it's loaded
-        if (followers.length > 0 && currentUser) {
-          setFollowers(prev => [currentUser, ...prev]);
+        if(profile.user.isPrivate){
+          // send follow request for private account
+          console.log("about 144: sending follow request...");
+          await userAPI.respondToFollowRequest(id);
+          setFollowRequestStatus('pending');
+        }else{
+          // if the account is public, its a direct follow
+          await userAPI.follow(id);
+          setIsFollowing(true);
+          setFollowersCount(prev => prev + 1);
+          setCanViewContent(true);
+          // Add current user to followers list if it's loaded
+          if (followers.length > 0 && currentUser) {
+            setFollowers(prev => [currentUser, ...prev]);
+          }
+
+          if (posts.length===0){
+            try{
+              const postsResponse = await postAPI.getPosts(id);
+              setPosts(postsResponse.data.data.posts || []);
+            }catch(error){
+              console.log("error fetching posts after follow",error);
+              throw error;
+            }
+          }
+
         }
       }
     } catch (error) {
@@ -130,7 +173,18 @@ export default function ProfilePage() {
     }
   };
 
+  const handleCancelFollowRequest =  async (id) => {
+    try {
+      await userAPI.cancelFollowRequest(id);
+      setFollowRequestStatus(null);
+    }catch(error){
+      console.error("error cancelling fillow request",error);
+    }
+  }
+
   const fetchFollowers = async () => {
+    if (!canViewContent) return;
+
     try {
       setIsLoadingFollowers(true);
       const response = await userAPI.getFollowers(id);
@@ -144,6 +198,8 @@ export default function ProfilePage() {
   };
 
   const fetchFollowing = async () => {
+    if (!canViewContent) return;
+
     try {
       setIsLoadingFollowing(true);
       const response = await userAPI.getFollowing(id);
@@ -159,6 +215,8 @@ export default function ProfilePage() {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
 
+    if (!canViewContent) return;
+
     // Fetch data when switching to followers/following tabs
     if (tab === 'followers' && followers.length === 0) {
       fetchFollowers();
@@ -167,6 +225,20 @@ export default function ProfilePage() {
     }
   };
 
+  const getFollowButtonText = () => {
+    if(isFollowing) return 'Unfollow';
+    if(followRequestStatus==='pending') return 'Requested';
+    if(profile.user.isPrivate) return 'Request';
+    return 'Follow';
+  }
+
+   const getFollowButtonAction = () => {
+    if (followRequestStatus === 'pending') {
+      return handleCancelFollowRequest;
+    }
+    return handleFollow;
+  };
+  
   const handleEditProfile = () => {
     setShowEditModal(true);
   };
@@ -491,9 +563,10 @@ export default function ProfilePage() {
                 </p>
               )}
 
+              {/* Stats are always visible - counts are shown even for private accounts */}
               <div className={styles.profileStats}>
                 <div className={styles.stat}>
-                  <span className={styles.statCount}>{posts.length}</span>
+                  <span className={styles.statCount}>{postsCount}</span>
                   <span className={styles.statLabel}>Posts</span>
                 </div>
                 <div className={styles.stat}>
@@ -512,10 +585,11 @@ export default function ProfilePage() {
                 <Button variant="outline" onClick={handleEditProfile}>Edit Profile</Button>
               ) : (
                 <Button
-                  variant={isFollowing ? 'secondary' : 'primary'}
-                  onClick={handleFollow}
+                  variant={isFollowing ? 'secondary' : followRequestStatus === 'pending' ? 'outline' : 'primary'}
+                  onClick={getFollowButtonAction()}
+                  disabled={followRequestStatus === 'pending' && !isFollowing}
                 >
-                  {isFollowing ? 'Unfollow' : 'Follow'}
+                  {getFollowButtonText()}
                 </Button>
               )}
             </div>
@@ -547,7 +621,16 @@ export default function ProfilePage() {
           <div className={styles.tabContent}>
             {activeTab === 'posts' && (
               <div className={styles.postsGrid}>
-                {posts.length === 0 ? (
+                {!canViewContent && !isOwnProfile ? (
+                  <div className={styles.privateContent}>
+                    <div className={styles.lockIcon}>🔒</div>
+                    <h3>This account is private</h3>
+                    <p>Follow this account to see their posts</p>
+                    {followRequestStatus === 'pending' && (
+                      <p className={styles.requestPending}>Follow request pending</p>
+                    )}
+                  </div>
+                ) : posts.length === 0 ? (
                   <div className={styles.emptyState}>
                     <p>No posts yet</p>
                     {isOwnProfile && (
@@ -562,6 +645,7 @@ export default function ProfilePage() {
                         post={post}
                         onDelete={(postId) => {
                           setPosts(prev => prev.filter(p => p.id !== postId));
+                          setPostsCount(prev => prev - 1);
                         }}
                         onUpdate={(postId, updatedData) => {
                           setPosts(prev => prev.map(p =>
@@ -577,7 +661,13 @@ export default function ProfilePage() {
 
             {activeTab === 'followers' && (
               <div className={styles.followersGrid}>
-                {isLoadingFollowers ? (
+                {!canViewContent && !isOwnProfile ? (
+                  <div className={styles.privateContent}>
+                    <div className={styles.lockIcon}>🔒</div>
+                    <h3>This account is private</h3>
+                    <p>Follow this account to see their followers</p>
+                  </div>
+                ) : isLoadingFollowers ? (
                   <div className={styles.loading}>
                     <p>Loading followers...</p>
                   </div>
@@ -593,9 +683,7 @@ export default function ProfilePage() {
                         user={follower}
                         showFollowButton={follower.id !== currentUser?.id}
                         onFollowChange={(userId, isFollowing) => {
-                          // Update local state if needed
                           console.log(`User ${userId} follow status changed to ${isFollowing}`);
-                          // Update the follower's isFollowing status in the local state
                           setFollowers(prev => prev.map(f =>
                             f.id === userId ? { ...f, isFollowing } : f
                           ));
@@ -609,7 +697,13 @@ export default function ProfilePage() {
 
             {activeTab === 'following' && (
               <div className={styles.followingGrid}>
-                {isLoadingFollowing ? (
+                {!canViewContent && !isOwnProfile ? (
+                  <div className={styles.privateContent}>
+                    <div className={styles.lockIcon}>🔒</div>
+                    <h3>This account is private</h3>
+                    <p> Follow this account to see who they're following</p>
+                  </div>
+                ) : isLoadingFollowing ? (
                   <div className={styles.loading}>
                     <p>Loading following...</p>
                   </div>
@@ -625,13 +719,10 @@ export default function ProfilePage() {
                         user={followedUser}
                         showFollowButton={followedUser.id !== currentUser?.id}
                         onFollowChange={(userId, isFollowing) => {
-                          // Update local state if needed
                           if (!isFollowing) {
-                            // Remove from following list if unfollowed
                             setFollowing(prev => prev.filter(user => user.id !== userId));
                             setFollowingCount(prev => prev - 1);
                           }
-                          // Update the followed user's isFollowing status in the local state
                           setFollowing(prev => prev.map(f =>
                             f.id === userId ? { ...f, isFollowing } : f
                           ));
@@ -644,8 +735,9 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
-      </div>
+        </div>
 
+            {/* edit your profile */}
       {showEditModal && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalContent}>

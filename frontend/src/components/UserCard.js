@@ -47,6 +47,8 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
     }
   };
 
+  
+
   return (
     <div className={styles.userCard}>
       <Link href={`/profile/${user.id}`} className={styles.userLink}>
@@ -83,20 +85,24 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
             <p className={styles.userBio}>{user.bio}</p>
           )}
         </div>
-      </Link>
 
-      {showFollowButton && !isOwnProfile && (
         <div className={styles.userActions}>
           <Button
             variant={isFollowing ? 'secondary' : 'primary'}
             size="small"
-            onClick={handleFollow}
+            // onClick={handleFollow}
             disabled={isLoading}
           >
-            {isLoading ? 'Loading...' : (isFollowing ? 'Unfollow' : 'Follow')}
+            {/* (isFollowing ? 'Unfollow' : 'Request Follow') */}
+            {isLoading ? 'Loading...' : 'see user profile'}
           </Button>
         </div>
-      )}
+      </Link>
+{/* 
+      {showFollowButton && !isOwnProfile && (
+        
+      )} */}
+
     </div>
   );
 }

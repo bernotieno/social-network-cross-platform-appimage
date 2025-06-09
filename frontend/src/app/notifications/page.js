@@ -31,7 +31,7 @@ export default function Notifications() {
   }, [fetchNotifications]);
 
   const getNotificationContent = (notification) => {
-    console.log("this is the notification", notification)
+    // console.log("this is the notification", notification)
 
     // Parse notification data if it's a string
     let notificationData = {};
@@ -201,7 +201,7 @@ export default function Notifications() {
 
   // These functions would call the appropriate API endpoints
   const handleFollowResponse = (notificationId, accept) => {
-    console.log(`Follow request ${accept ? 'accepted' : 'declined'}: ${notificationId}`);
+    console.log(`${notificationId} ${accept ? 'accepted' : 'declined'} your request...`);
     markAsRead(notificationId);
   };
 

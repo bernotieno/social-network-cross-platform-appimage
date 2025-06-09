@@ -22,7 +22,6 @@ const useNotifications = () => {
       }
 
       const response = await notificationAPI.getNotifications();
-      console.log(">>>>res2", response)
       // Handle case where notifications might be null
       const notificationsData = response.data.data.notifications || [];
       setNotifications(notificationsData);
