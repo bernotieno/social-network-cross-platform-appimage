@@ -6,12 +6,14 @@ import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { userAPI } from '@/utils/api';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
+import { getFollowButtonState } from '@/utils/privacy';
 import Button from './Button';
 import styles from '@/styles/UserCard.module.css';
 
 export default function UserCard({ user, showFollowButton = true, onFollowChange }) {
   const { user: currentUser } = useAuth();
   const [isFollowing, setIsFollowing] = useState(user.isFollowing || false);
+  const [hasPendingRequest, setHasPendingRequest] = useState(user.hasPendingFollowRequest || false);
   const [isLoading, setIsLoading] = useState(false);
 
   const isOwnProfile = currentUser?.id === user.id;
@@ -19,7 +21,8 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
   // Update follow state when user prop changes
   useEffect(() => {
     setIsFollowing(user.isFollowing || false);
-  }, [user.isFollowing]);
+    setHasPendingRequest(user.hasPendingFollowRequest || false);
+  }, [user.isFollowing, user.hasPendingFollowRequest]);
 
   const handleFollow = async () => {
     if (isLoading || isOwnProfile) return;
@@ -27,18 +30,54 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
     try {
       setIsLoading(true);
 
-      if (isFollowing) {
-        await userAPI.unfollow(user.id);
-        setIsFollowing(false);
-        if (onFollowChange) {
-          onFollowChange(user.id, false);
-        }
-      } else {
-        await userAPI.follow(user.id);
-        setIsFollowing(true);
-        if (onFollowChange) {
-          onFollowChange(user.id, true);
-        }
+      // Create a profile-like object for the button state function
+      const profileData = {
+        user: user,
+        isFollowedByCurrentUser: isFollowing,
+        hasPendingFollowRequest: hasPendingRequest,
+        followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : '')
+      };
+
+      const buttonState = getFollowButtonState(profileData, currentUser);
+
+      switch (buttonState.action) {
+        case 'unfollow':
+          await userAPI.unfollow(user.id);
+          setIsFollowing(false);
+          setHasPendingRequest(false);
+          if (onFollowChange) {
+            onFollowChange(user.id, false);
+          }
+          break;
+
+        case 'follow':
+        case 'request_follow':
+          await userAPI.follow(user.id);
+          if (user.isPrivate) {
+            // For private users, set pending request
+            setHasPendingRequest(true);
+            setIsFollowing(false);
+          } else {
+            // For public users, set following
+            setIsFollowing(true);
+            setHasPendingRequest(false);
+          }
+          if (onFollowChange) {
+            onFollowChange(user.id, !user.isPrivate);
+          }
+          break;
+
+        case 'cancel_request':
+          await userAPI.unfollow(user.id);
+          setHasPendingRequest(false);
+          setIsFollowing(false);
+          if (onFollowChange) {
+            onFollowChange(user.id, false);
+          }
+          break;
+
+        default:
+          break;
       }
     } catch (error) {
       console.error('Error following/unfollowing user:', error);
@@ -87,14 +126,28 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
 
       {showFollowButton && !isOwnProfile && (
         <div className={styles.userActions}>
-          <Button
-            variant={isFollowing ? 'secondary' : 'primary'}
-            size="small"
-            onClick={handleFollow}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Loading...' : (isFollowing ? 'Unfollow' : 'Follow')}
-          </Button>
+          {(() => {
+            // Create a profile-like object for the button state function
+            const profileData = {
+              user: user,
+              isFollowedByCurrentUser: isFollowing,
+              hasPendingFollowRequest: hasPendingRequest,
+              followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : '')
+            };
+
+            const buttonState = getFollowButtonState(profileData, currentUser);
+
+            return (
+              <Button
+                variant={buttonState.variant}
+                size="small"
+                onClick={handleFollow}
+                disabled={isLoading || buttonState.disabled}
+              >
+                {isLoading ? 'Loading...' : buttonState.text}
+              </Button>
+            );
+          })()}
         </div>
       )}
     </div>
