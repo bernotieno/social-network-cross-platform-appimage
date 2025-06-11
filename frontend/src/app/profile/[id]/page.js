@@ -456,7 +456,7 @@ export default function ProfilePage() {
                 <span>📷</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleCoverPhotoChange}
                   style={{ display: 'none' }}
                 />
