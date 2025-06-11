@@ -42,6 +42,20 @@ export default function GroupEditModal({ group, isOpen, onClose, onUpdate }) {
   const handleCoverPhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type and size
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
+
+      if (!allowedTypes.includes(file.type)) {
+        showError('Please select a valid image file (JPEG, PNG, or GIF)', 'Invalid File Type');
+        return;
+      }
+
+      if (file.size > maxSize) {
+        showError('File size must be less than 5MB', 'File Too Large');
+        return;
+      }
+
       setCoverPhoto(file);
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -146,7 +160,7 @@ export default function GroupEditModal({ group, isOpen, onClose, onUpdate }) {
               )}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/jpg,image/png,image/gif"
                 onChange={handleCoverPhotoChange}
                 className={styles.fileInput}
                 disabled={isLoading}
