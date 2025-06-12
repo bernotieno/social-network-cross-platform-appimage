@@ -161,36 +161,48 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Validate request
 	if req.Email == "" || req.Password == "" {
+		log.Println("Login validation failed: missing email or password")
 		utils.RespondWithError(w, http.StatusBadRequest, "Email and password are required")
 		return
 	}
 
+	log.Printf("Looking up user by email: %s", req.Email)
 	// Get user by email
 	user, err := h.UserService.GetByEmail(req.Email)
 	if err != nil {
+		log.Printf("User lookup failed for email %s: %v", req.Email, err)
 		utils.RespondWithError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
+	log.Printf("User found: ID=%s, Email=%s", user.ID, user.Email)
 
 	// Check password
+	log.Println("Checking password...")
 	if !h.UserService.CheckPassword(user, req.Password) {
+		log.Printf("Password check failed for user %s", user.Email)
 		utils.RespondWithError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
+	log.Printf("Password check successful for user %s", user.Email)
 
 	// Create session
+	log.Printf("Creating session for user ID: %s", user.ID)
 	sessionID, err := auth.CreateSession(r.Context(), h.DB, user.ID, w, r)
 	if err != nil {
+		log.Printf("Failed to create session: %v", err)
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create session")
 		return
 	}
+	log.Printf("Session created successfully with ID: %s", sessionID)
 
 	// Return user data (without password)
 	user.Password = ""
-	utils.RespondWithSuccess(w, http.StatusOK, "Login successful", map[string]interface{}{
+	responseData := map[string]interface{}{
 		"user":  user,
 		"token": sessionID,
-	})
+	}
+	log.Printf("Sending login response with token: %s", sessionID)
+	utils.RespondWithSuccess(w, http.StatusOK, "Login successful", responseData)
 }
 
 // Logout handles user logout
