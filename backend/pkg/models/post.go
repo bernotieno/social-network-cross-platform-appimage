@@ -16,6 +16,7 @@ const (
 	PostVisibilityPublic    PostVisibility = "public"
 	PostVisibilityFollowers PostVisibility = "followers"
 	PostVisibilityPrivate   PostVisibility = "private"
+	PostVisibilityCustom    PostVisibility = "custom"
 )
 
 // Post represents a user post
@@ -101,6 +102,21 @@ func (s *PostService) GetByID(id string, currentUserID string) (*Post, error) {
 			}
 
 			if !isFollowing {
+				return nil, errors.New("not authorized to view this post")
+			}
+		} else if post.Visibility == PostVisibilityCustom {
+			// For custom visibility posts, check if the user is in the viewers list
+			var canView bool
+			err := s.DB.QueryRow(`
+				SELECT COUNT(*) > 0
+				FROM post_viewers
+				WHERE post_id = ? AND user_id = ?
+			`, post.ID, currentUserID).Scan(&canView)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check custom viewer permission: %w", err)
+			}
+
+			if !canView {
 				return nil, errors.New("not authorized to view this post")
 			}
 		} else {
