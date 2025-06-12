@@ -13,8 +13,12 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = getToken();
+    console.log('API Request - Token from storage:', token);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('API Request - Authorization header set:', config.headers.Authorization);
+    } else {
+      console.log('API Request - No token found, skipping Authorization header');
     }
     return config;
   },
