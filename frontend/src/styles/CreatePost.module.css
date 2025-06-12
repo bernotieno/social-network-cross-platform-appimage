@@ -194,6 +194,69 @@
   gap: 4px;
 }
 
+/* Custom Visibility Section */
+.customVisibilitySection {
+  background-color: #f8f9fa;
+  border: 1px solid #e1e5e9;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+.customVisibilityHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.customVisibilityLabel {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.selectFollowersButton {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.selectFollowersButton:hover {
+  background-color: #0056b3;
+}
+
+.noFollowersSelected {
+  color: #666;
+  font-style: italic;
+  font-size: 14px;
+  text-align: center;
+  padding: 1rem;
+  background-color: #fff;
+  border: 1px dashed #ddd;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .customVisibilityHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .selectFollowersButton {
+    align-self: stretch;
+    text-align: center;
+  }
+}
+
 @media (max-width: 576px) {
   .createPostCard {
     padding: 1rem;
