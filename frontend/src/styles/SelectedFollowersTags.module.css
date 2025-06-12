@@ -1,0 +1,90 @@
+.container {
+  margin-top: 12px;
+}
+
+.label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.tagsContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  display: flex;
+  align-items: center;
+  background-color: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 20px;
+  padding: 4px 8px 4px 4px;
+  font-size: 13px;
+  color: #1976d2;
+  transition: all 0.2s;
+}
+
+.tag:hover {
+  background-color: #bbdefb;
+  border-color: #90caf9;
+}
+
+.avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 6px;
+  border: 1px solid #90caf9;
+}
+
+.username {
+  font-weight: 500;
+  margin-right: 6px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.removeButton {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.removeButton:hover {
+  background-color: #1976d2;
+  color: white;
+}
+
+.loading {
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .username {
+    max-width: 80px;
+  }
+  
+  .tag {
+    font-size: 12px;
+  }
+}
