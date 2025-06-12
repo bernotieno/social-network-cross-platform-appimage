@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,15 +37,18 @@ func (s *SessionService) Create(userID string, duration time.Duration) (*Session
 		CreatedAt: time.Now(),
 	}
 
+	log.Printf("Creating session with ID: %s for user: %s", session.ID, userID)
+
 	_, err := s.DB.Exec(`
 		INSERT INTO sessions (id, user_id, expires_at, created_at)
 		VALUES (?, ?, ?, ?)
 	`, session.ID, session.UserID, session.ExpiresAt, session.CreatedAt)
-
 	if err != nil {
+		log.Printf("Failed to insert session into database: %v", err)
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
+	log.Printf("Session created successfully in database with ID: %s", session.ID)
 	return session, nil
 }
 
@@ -56,7 +60,6 @@ func (s *SessionService) GetByID(id string) (*Session, error) {
 		FROM sessions
 		WHERE id = ?
 	`, id).Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.CreatedAt)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("session not found")
