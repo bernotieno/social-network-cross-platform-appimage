@@ -9,6 +9,8 @@ import { getImageUrl, validateImageFile, getFileTypeDisplayName } from '@/utils/
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import FollowerSelector from '@/components/FollowerSelector';
+import SelectedFollowersTags from '@/components/SelectedFollowersTags';
 import styles from '@/styles/CreatePost.module.css';
 
 export default function CreatePost() {
@@ -20,6 +22,8 @@ export default function CreatePost() {
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [visibility, setVisibility] = useState('public');
+  const [selectedFollowers, setSelectedFollowers] = useState([]);
+  const [showFollowerSelector, setShowFollowerSelector] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,7 +59,18 @@ export default function CreatePost() {
   };
 
   const handleVisibilityChange = (e) => {
-    setVisibility(e.target.value);
+    const newVisibility = e.target.value;
+    setVisibility(newVisibility);
+
+    // Clear selected followers if not custom visibility
+    if (newVisibility !== 'custom') {
+      setSelectedFollowers([]);
+    }
+
+    // Show follower selector if custom visibility is selected
+    if (newVisibility === 'custom') {
+      setShowFollowerSelector(true);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -74,6 +89,11 @@ export default function CreatePost() {
       const formData = new FormData();
       formData.append('content', content);
       formData.append('visibility', visibility);
+
+      // Add custom viewers if visibility is custom
+      if (visibility === 'custom' && selectedFollowers.length > 0) {
+        formData.append('customViewers', JSON.stringify(selectedFollowers));
+      }
 
       if (image) {
         formData.append('image', image);
@@ -173,9 +193,41 @@ export default function CreatePost() {
                 >
                   <option value="public">Everyone</option>
                   <option value="followers">Followers only</option>
+                  <option value="custom">Custom (Select followers)</option>
                   <option value="private">Only me</option>
                 </select>
               </div>
+
+              {/* Custom Followers Selection */}
+              {visibility === 'custom' && (
+                <div className={styles.customVisibilitySection}>
+                  <div className={styles.customVisibilityHeader}>
+                    <span className={styles.customVisibilityLabel}>
+                      Select specific followers who can see this post:
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.selectFollowersButton}
+                      onClick={() => setShowFollowerSelector(true)}
+                    >
+                      {selectedFollowers.length === 0 ? 'Select Followers' : `Edit Selection (${selectedFollowers.length})`}
+                    </button>
+                  </div>
+
+                  <SelectedFollowersTags
+                    selectedFollowerIds={selectedFollowers}
+                    onRemoveFollower={(followerId) => {
+                      setSelectedFollowers(prev => prev.filter(id => id !== followerId));
+                    }}
+                  />
+
+                  {selectedFollowers.length === 0 && (
+                    <div className={styles.noFollowersSelected}>
+                      No followers selected. Click "Select Followers" to choose who can see this post.
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className={styles.addToPost}>
                 <p className={styles.addToPostLabel}>Add to your post:</p>
@@ -204,6 +256,14 @@ export default function CreatePost() {
               {isSubmitting ? 'Posting...' : 'Post'}
             </Button>
           </form>
+
+          {/* Follower Selector Modal */}
+          <FollowerSelector
+            selectedFollowers={selectedFollowers}
+            onSelectionChange={setSelectedFollowers}
+            isVisible={showFollowerSelector}
+            onClose={() => setShowFollowerSelector(false)}
+          />
         </div>
       </div>
     </ProtectedRoute>
