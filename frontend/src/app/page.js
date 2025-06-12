@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { postAPI } from '@/utils/api';
 import { subscribeToNewPosts } from '@/utils/socket';
@@ -44,10 +43,14 @@ export default function Home() {
   const fetchFeed = async () => {
     try {
       setIsLoading(true);
+      console.log('Fetching feed...');
       const response = await postAPI.getFeed();
-      setPosts(response.data.data.posts || []);
+      console.log('Feed response:', response.data);
+      console.log('Posts from response:', response.data.data?.posts);
+      setPosts(response.data.data?.posts || []);
     } catch (error) {
       console.error('Error fetching feed:', error);
+      console.error('Error details:', error.response?.data);
     } finally {
       setIsLoading(false);
     }
