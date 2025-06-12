@@ -38,6 +38,7 @@ type Handler struct {
 	SessionService       *models.SessionService
 	FollowService        *models.FollowService
 	PostService          *models.PostService
+	PostViewerService    *models.PostViewerService
 	CommentService       *models.CommentService
 	LikeService          *models.LikeService
 	GroupService         *models.GroupService
@@ -59,6 +60,7 @@ func NewHandler(db *sql.DB, hub *websocket.Hub) *Handler {
 		SessionService:       models.NewSessionService(db),
 		FollowService:        models.NewFollowService(db),
 		PostService:          models.NewPostService(db),
+		PostViewerService:    models.NewPostViewerService(db),
 		CommentService:       models.NewCommentService(db),
 		LikeService:          models.NewLikeService(db),
 		GroupService:         models.NewGroupService(db),
