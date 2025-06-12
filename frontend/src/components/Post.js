@@ -16,6 +16,11 @@ import styles from '@/styles/Post.module.css';
 const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, isGroupAdmin = false }) => {
   const { user } = useAuth();
   const { showSuccess } = useAlert();
+
+  // Early return if post is not properly loaded
+  if (!post || !post.id) {
+    return <div className={styles.post}>Loading post...</div>;
+  }
   const [isLiked, setIsLiked] = useState(post.isLikedByCurrentUser || false);
   const [likesCount, setLikesCount] = useState(post.likesCount || 0);
   const [showComments, setShowComments] = useState(false);
@@ -224,7 +229,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
   useEffect(() => {
     // Subscribe to post likes/unlikes
     const unsubscribeLikes = subscribeToPostLikes((data) => {
-      if (data.postId === post.id) {
+      if (post?.id && data.postId === post.id) {
         if (data.action === 'like') {
           setLikesCount(prev => prev + 1);
           // If the current user liked it, update the like state
@@ -243,14 +248,14 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
 
     // Subscribe to new comments
     const unsubscribeComments = subscribeToNewComments((data) => {
-      if (data.postId === post.id && showComments) {
+      if (post?.id && data.postId === post.id && showComments) {
         setComments(prev => [...prev, data.comment]);
       }
     });
 
     // Subscribe to comment deletions
     const unsubscribeCommentDeletions = subscribeToCommentDeletions((data) => {
-      if (data.postId === post.id && showComments) {
+      if (post?.id && data.postId === post.id && showComments) {
         setComments(prev => prev.filter(comment => comment.id !== data.commentId));
       }
     });
@@ -260,7 +265,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
       unsubscribeComments();
       unsubscribeCommentDeletions();
     };
-  }, [post.id, user?.id, showComments]);
+  }, [post?.id, user?.id, showComments]);
 
   const handleDropdownToggle = () => {
     setShowDropdown(!showDropdown);
