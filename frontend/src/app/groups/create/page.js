@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { groupAPI } from '@/utils/api';
+import { isGif, validateImageFile } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -34,17 +35,10 @@ export default function CreateGroup() {
   const handleCoverPhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type and size
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-      const maxSize = 5 * 1024 * 1024; // 5MB
-
-      if (!allowedTypes.includes(file.type)) {
-        showError('Please select a valid image file (JPEG, PNG, or GIF)', 'Invalid File Type');
-        return;
-      }
-
-      if (file.size > maxSize) {
-        showError('File size must be less than 5MB', 'File Too Large');
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        showError(validation.error, 'Invalid File');
         return;
       }
 
@@ -116,12 +110,27 @@ export default function CreateGroup() {
               <div className={styles.coverPhotoContainer}>
                 {coverPhotoPreview ? (
                   <div className={styles.coverPhotoPreview}>
-                    <Image
-                      src={coverPhotoPreview}
-                      alt="Cover photo preview"
-                      fill
-                      style={{ objectFit: 'cover' }}
-                    />
+                    {coverPhoto && isGif(coverPhoto.name) ? (
+                      // Use regular img tag for GIFs to preserve animation
+                      <img
+                        src={coverPhotoPreview}
+                        alt="Cover photo preview"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                      />
+                    ) : (
+                      // Use Next.js Image for static images
+                      <Image
+                        src={coverPhotoPreview}
+                        alt="Cover photo preview"
+                        fill
+                        style={{ objectFit: 'cover' }}
+                      />
+                    )}
                     <button
                       type="button"
                       className={styles.removeCoverPhoto}
