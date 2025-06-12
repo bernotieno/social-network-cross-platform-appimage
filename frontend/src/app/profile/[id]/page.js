@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { userAPI, postAPI } from '@/utils/api';
-import { getUserProfilePictureUrl, getUserCoverPhotoUrl, getFallbackAvatar } from '@/utils/images';
+import { getUserProfilePictureUrl, getUserCoverPhotoUrl, getFallbackAvatar, validateImageFile } from '@/utils/images';
 import Button from '@/components/Button';
 import Post from '@/components/Post';
 import UserCard from '@/components/UserCard';
@@ -186,17 +186,10 @@ export default function ProfilePage() {
   const handleProfilePicChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type and size
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-      const maxSize = 5 * 1024 * 1024; // 5MB
-
-      if (!allowedTypes.includes(file.type)) {
-        console.error('Invalid file type. Please select JPEG, PNG, or GIF.');
-        return;
-      }
-
-      if (file.size > maxSize) {
-        console.error('File size too large. Please select a file under 5MB.');
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        console.error(validation.error);
         return;
       }
 
@@ -212,17 +205,10 @@ export default function ProfilePage() {
   const handleCoverPhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type and size
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-      const maxSize = 5 * 1024 * 1024; // 5MB
-
-      if (!allowedTypes.includes(file.type)) {
-        console.error('Invalid file type. Please select JPEG, PNG, or GIF.');
-        return;
-      }
-
-      if (file.size > maxSize) {
-        console.error('File size too large. Please select a file under 5MB.');
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        console.error(validation.error);
         return;
       }
 
