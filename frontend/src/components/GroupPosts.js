@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { groupAPI } from '@/utils/api';
-import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
+import { getUserProfilePictureUrl, getFallbackAvatar, isGif, validateImageFile } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import Post from '@/components/Post';
@@ -45,17 +45,10 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type and size
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-      const maxSize = 5 * 1024 * 1024; // 5MB
-
-      if (!allowedTypes.includes(file.type)) {
-        showError('Please select a valid image file (JPEG, PNG, or GIF)', 'Invalid File Type');
-        return;
-      }
-
-      if (file.size > maxSize) {
-        showError('File size must be less than 5MB', 'File Too Large');
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        showError(validation.error, 'Invalid File');
         return;
       }
 
@@ -206,13 +199,28 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
 
               {imagePreview && (
                 <div className={styles.imagePreview}>
-                  <Image
-                    src={imagePreview}
-                    alt="Preview"
-                    width={200}
-                    height={200}
-                    style={{ objectFit: 'cover' }}
-                  />
+                  {newPost.image && isGif(newPost.image.name) ? (
+                    // Use regular img tag for GIFs to preserve animation
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      style={{
+                        width: '200px',
+                        height: '200px',
+                        objectFit: 'cover',
+                        borderRadius: '8px'
+                      }}
+                    />
+                  ) : (
+                    // Use Next.js Image for static images
+                    <Image
+                      src={imagePreview}
+                      alt="Preview"
+                      width={200}
+                      height={200}
+                      style={{ objectFit: 'cover' }}
+                    />
+                  )}
                   <button
                     type="button"
                     className={styles.removeImage}
