@@ -55,21 +55,44 @@ export const AuthProvider = ({ children }) => {
       setIsLoading(true);
       const response = await authAPI.login(email, password);
       console.log('Login response:', response.data);
-      const { token, user } = await response.data.data;
+      console.log('Login response headers:', response.headers);
+      console.log('Set-Cookie header:', response.headers['set-cookie']);
 
-      console.log(">>>",response.data.data.token);
+      // Check if response.data exists and has the expected structure
+      if (!response.data || !response.data.data) {
+        throw new Error('Invalid response structure from login API');
+      }
+
+      const token = response.data.data.token;
+      const user = response.data.data.user;
+
+      console.log('Extracted token:', token);
+      console.log('Extracted user:', user);
+
+      // Validate that we got the required fields
+      if (!token || token === '') {
+        throw new Error(`No token received from login API. Got: "${token}"`);
+      }
+
+      if (!user) {
+        throw new Error(`No user data received from login API. Got: ${user}`);
+      }
+
+      console.log(">>>",response.data.token);
       console.log('Extracted token:', token);
       console.log('Extracted user:', user);
 
       setAuth(token, user);
       setUser(user);
 
-      // Initialize WebSocket connection after successful login
-      try {
-        initializeSocket();
-      } catch (error) {
-        console.warn('Failed to initialize WebSocket after login:', error);
-      }
+      // Initialize WebSocket connection after successful login (non-blocking)
+      setTimeout(() => {
+        try {
+          initializeSocket();
+        } catch (error) {
+          console.warn('Failed to initialize WebSocket after login - Real-time features will be disabled:', error);
+        }
+      }, 100);
 
       return { success: true };
     } catch (error) {
@@ -92,7 +115,8 @@ export const AuthProvider = ({ children }) => {
       console.log('Registration response:', response.data);
 
       // Parse response data - backend returns data in response.data.data
-      const { token, user } = response.data.data;
+      const token = response.data.data.token;
+      const user = response.data.data.user;
 
       setAuth(token, user);
       setUser(user);
