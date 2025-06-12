@@ -8,6 +8,8 @@ import { getUserProfilePictureUrl, getFallbackAvatar, isGif, validateImageFile }
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import Post from '@/components/Post';
+import FollowerSelector from '@/components/FollowerSelector';
+import SelectedFollowersTags from '@/components/SelectedFollowersTags';
 import styles from '@/styles/GroupPosts.module.css';
 
 export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
