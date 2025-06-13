@@ -204,7 +204,8 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	// Validate visibility
 	if visibility != string(models.PostVisibilityPublic) &&
 		visibility != string(models.PostVisibilityFollowers) &&
-		visibility != string(models.PostVisibilityPrivate) {
+		visibility != string(models.PostVisibilityPrivate) &&
+		visibility != string(models.PostVisibilityCustom) {
 		visibility = string(models.PostVisibilityPublic)
 	}
 
