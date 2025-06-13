@@ -26,14 +26,15 @@ const FollowerSelector = ({ selectedFollowers, onSelectionChange, isVisible, onC
 
     setLoading(true);
     try {
-      // Get current user's followers
-      const response = await userAPI.getFollowers(user.id);
+      // Get current user's following list (people they follow)
+      // This is who they can share custom posts with
+      const response = await userAPI.getFollowing(user.id);
       if (response.data.success) {
-        setFollowers(response.data.followers || []);
+        setFollowers(response.data.following || []);
       }
     } catch (error) {
-      console.error('Error fetching followers:', error);
-      showError('Failed to load followers', 'Error');
+      console.error('Error fetching following list:', error);
+      showError('Failed to load following list', 'Error');
     } finally {
       setLoading(false);
     }
@@ -66,7 +67,7 @@ const FollowerSelector = ({ selectedFollowers, onSelectionChange, isVisible, onC
     <div className={styles.overlay}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <h3>Select Followers</h3>
+          <h3>Select People to Share With</h3>
           <button className={styles.closeButton} onClick={onClose}>
             ✕
           </button>
@@ -75,7 +76,7 @@ const FollowerSelector = ({ selectedFollowers, onSelectionChange, isVisible, onC
         <div className={styles.searchContainer}>
           <input
             type="text"
-            placeholder="Search followers..."
+            placeholder="Search people you follow..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className={styles.searchInput}
@@ -97,10 +98,10 @@ const FollowerSelector = ({ selectedFollowers, onSelectionChange, isVisible, onC
 
         <div className={styles.followersList}>
           {loading ? (
-            <div className={styles.loading}>Loading followers...</div>
+            <div className={styles.loading}>Loading people you follow...</div>
           ) : filteredFollowers.length === 0 ? (
             <div className={styles.noFollowers}>
-              {searchTerm ? 'No followers found matching your search.' : 'You have no followers yet.'}
+              {searchTerm ? 'No people found matching your search.' : 'You are not following anyone yet.'}
             </div>
           ) : (
             filteredFollowers.map(follower => (
