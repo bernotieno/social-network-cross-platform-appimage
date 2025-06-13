@@ -412,10 +412,18 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
                 className={styles.editVisibilitySelect}
                 disabled={isSubmittingEdit}
               >
-                <option value="public">Public</option>
-                <option value="friends">Friends</option>
-                <option value="private">Private</option>
+                <option value="public">🌍 Public</option>
+                <option value="followers">👥 Followers</option>
+                {editVisibility === 'custom' && (
+                  <option value="custom">🎯 Custom (current)</option>
+                )}
+                <option value="private">🔒 Private</option>
               </select>
+              {editVisibility === 'custom' && (
+                <div className={styles.customVisibilityNote}>
+                  <small>Note: To change custom visibility settings, please create a new post.</small>
+                </div>
+              )}
 
               <div className={styles.editButtons}>
                 <Button
