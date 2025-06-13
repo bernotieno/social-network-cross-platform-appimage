@@ -66,6 +66,8 @@ func (s *PostService) Create(post *Post) error {
 // GetByID retrieves a post by ID
 func (s *PostService) GetByID(id string, currentUserID string) (*Post, error) {
 	post := &Post{User: &User{}}
+	var image sql.NullString
+	var profilePicture sql.NullString
 	err := s.DB.QueryRow(`
 		SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
@@ -76,10 +78,18 @@ func (s *PostService) GetByID(id string, currentUserID string) (*Post, error) {
 		JOIN users u ON p.user_id = u.id
 		WHERE p.id = ?
 	`, currentUserID, id).Scan(
-		&post.ID, &post.UserID, &post.Content, &post.Image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
-		&post.User.ID, &post.User.Username, &post.User.FullName, &post.User.ProfilePicture,
+		&post.ID, &post.UserID, &post.Content, &image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
+		&post.User.ID, &post.User.Username, &post.User.FullName, &profilePicture,
 		&post.LikesCount, &post.CommentsCount, &post.IsLiked,
 	)
+
+	// Handle nullable fields
+	if image.Valid {
+		post.Image = image.String
+	}
+	if profilePicture.Valid {
+		post.User.ProfilePicture = profilePicture.String
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("post not found")
@@ -248,14 +258,25 @@ func (s *PostService) scanPosts(rows *sql.Rows) ([]*Post, error) {
 	var posts []*Post
 	for rows.Next() {
 		post := &Post{User: &User{}}
+		var image sql.NullString
+		var profilePicture sql.NullString
 		err := rows.Scan(
-			&post.ID, &post.UserID, &post.Content, &post.Image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
-			&post.User.ID, &post.User.Username, &post.User.FullName, &post.User.ProfilePicture,
+			&post.ID, &post.UserID, &post.Content, &image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
+			&post.User.ID, &post.User.Username, &post.User.FullName, &profilePicture,
 			&post.LikesCount, &post.CommentsCount, &post.IsLiked,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan post: %w", err)
 		}
+
+		// Handle nullable fields
+		if image.Valid {
+			post.Image = image.String
+		}
+		if profilePicture.Valid {
+			post.User.ProfilePicture = profilePicture.String
+		}
+
 		posts = append(posts, post)
 	}
 
@@ -277,7 +298,7 @@ func (s *PostService) GetFeed(userID string, limit, offset int) ([]*Post, error)
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		WHERE
-			-- Include user's own posts
+			-- Include user's own posts (all visibility levels)
 			p.user_id = ?
 			-- Include public posts from users the user is following
 			OR (p.visibility = ? AND p.user_id IN (
@@ -287,13 +308,20 @@ func (s *PostService) GetFeed(userID string, limit, offset int) ([]*Post, error)
 			OR (p.visibility = ? AND p.user_id IN (
 				SELECT following_id FROM follows WHERE follower_id = ? AND status = 'accepted'
 			))
-			-- Include public posts from users with public profiles
+			-- Include public posts from users with public profiles (not following)
 			OR (p.visibility = ? AND p.user_id IN (
 				SELECT id FROM users WHERE is_private = FALSE
+			) AND p.user_id NOT IN (
+				SELECT following_id FROM follows WHERE follower_id = ? AND status = 'accepted'
 			))
+			-- Include custom visibility posts where the user is in the viewers list
+			OR (p.visibility = ? AND p.id IN (
+				SELECT post_id FROM post_viewers WHERE user_id = ?
+			))
+			-- Note: Private posts are only visible to the owner (handled by first condition)
 		ORDER BY p.created_at DESC
 		LIMIT ? OFFSET ?
-	`, userID, userID, PostVisibilityPublic, userID, PostVisibilityFollowers, userID, PostVisibilityPublic, limit, offset)
+	`, userID, userID, PostVisibilityPublic, userID, PostVisibilityFollowers, userID, PostVisibilityPublic, userID, PostVisibilityCustom, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feed: %w", err)
 	}
@@ -302,14 +330,25 @@ func (s *PostService) GetFeed(userID string, limit, offset int) ([]*Post, error)
 	var posts []*Post
 	for rows.Next() {
 		post := &Post{User: &User{}}
+		var image sql.NullString
+		var profilePicture sql.NullString
 		err := rows.Scan(
-			&post.ID, &post.UserID, &post.Content, &post.Image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
-			&post.User.ID, &post.User.Username, &post.User.FullName, &post.User.ProfilePicture,
+			&post.ID, &post.UserID, &post.Content, &image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
+			&post.User.ID, &post.User.Username, &post.User.FullName, &profilePicture,
 			&post.LikesCount, &post.CommentsCount, &post.IsLiked,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan post: %w", err)
 		}
+
+		// Handle nullable fields
+		if image.Valid {
+			post.Image = image.String
+		}
+		if profilePicture.Valid {
+			post.User.ProfilePicture = profilePicture.String
+		}
+
 		posts = append(posts, post)
 	}
 
