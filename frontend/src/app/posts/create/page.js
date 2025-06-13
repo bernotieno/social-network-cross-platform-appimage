@@ -81,6 +81,12 @@ export default function CreatePost() {
       return;
     }
 
+    // Validate custom visibility
+    if (visibility === 'custom' && selectedFollowers.length === 0) {
+      setError('Please select at least one follower for custom visibility posts');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError('');
@@ -191,11 +197,35 @@ export default function CreatePost() {
                   value={visibility}
                   onChange={handleVisibilityChange}
                 >
-                  <option value="public">Everyone</option>
-                  <option value="followers">Followers only</option>
-                  <option value="custom">Custom (Select followers)</option>
-                  <option value="private">Only me</option>
+                  <option value="public">🌍 Public - Everyone can see</option>
+                  <option value="followers">👥 Followers - Only people who follow you</option>
+                  <option value="custom">🎯 Custom - Select specific followers</option>
+                  <option value="private">🔒 Private - Only you can see</option>
                 </select>
+
+                {/* Privacy Level Description */}
+                <div className={styles.privacyDescription}>
+                  {visibility === 'public' && (
+                    <span className={styles.privacyNote}>
+                      📢 This post will be visible to everyone, including people who don't follow you.
+                    </span>
+                  )}
+                  {visibility === 'followers' && (
+                    <span className={styles.privacyNote}>
+                      👥 This post will only be visible to people who follow you.
+                    </span>
+                  )}
+                  {visibility === 'custom' && (
+                    <span className={styles.privacyNote}>
+                      🎯 This post will only be visible to the specific followers you select below.
+                    </span>
+                  )}
+                  {visibility === 'private' && (
+                    <span className={styles.privacyNote}>
+                      🔒 This post will only be visible to you. Perfect for drafts or personal notes.
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Custom Followers Selection */}
