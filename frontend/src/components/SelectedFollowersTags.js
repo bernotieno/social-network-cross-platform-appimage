@@ -25,16 +25,16 @@ const SelectedFollowersTags = ({ selectedFollowerIds, onRemoveFollower }) => {
 
     setLoading(true);
     try {
-      const response = await userAPI.getFollowers(user.id);
+      const response = await userAPI.getFollowing(user.id);
       if (response.data.success) {
-        const allFollowers = response.data.followers || [];
-        const selectedFollowers = allFollowers.filter(follower =>
+        const allFollowing = response.data.following || [];
+        const selectedFollowers = allFollowing.filter(follower =>
           selectedFollowerIds.includes(follower.id)
         );
         setFollowers(selectedFollowers);
       }
     } catch (error) {
-      console.error('Error fetching follower details:', error);
+      console.error('Error fetching following details:', error);
     } finally {
       setLoading(false);
     }
