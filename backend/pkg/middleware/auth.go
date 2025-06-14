@@ -37,11 +37,16 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			// Validate session
 			userID, err := auth.ValidateSession(r.Context(), db, sessionID)
 			if err == nil {
+				log.Printf("Auth middleware: Session valid for user %s", userID)
 				// Add user ID to request context
 				ctx := context.WithValue(r.Context(), UserIDKey, userID)
 				next(w, r.WithContext(ctx))
 				return
+			} else {
+				log.Printf("Auth middleware: Session validation failed: %v", err)
 			}
+		} else {
+			log.Printf("Auth middleware: Failed to get session cookie: %v", err)
 		}
 
 		// If cookie auth fails, try Bearer token authentication

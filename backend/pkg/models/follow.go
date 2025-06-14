@@ -66,7 +66,6 @@ func (s *FollowService) Create(followerID, followingID string, isPrivate bool) (
 		INSERT INTO follows (id, follower_id, following_id, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, follow.ID, follow.FollowerID, follow.FollowingID, follow.Status, follow.CreatedAt, follow.UpdatedAt)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create follow: %w", err)
 	}
@@ -82,7 +81,6 @@ func (s *FollowService) GetByID(id string) (*Follow, error) {
 		FROM follows
 		WHERE id = ?
 	`, id).Scan(&follow.ID, &follow.FollowerID, &follow.FollowingID, &follow.Status, &follow.CreatedAt, &follow.UpdatedAt)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("follow relationship not found")
@@ -101,7 +99,6 @@ func (s *FollowService) GetByUserIDs(followerID, followingID string) (*Follow, e
 		FROM follows
 		WHERE follower_id = ? AND following_id = ?
 	`, followerID, followingID).Scan(&follow.ID, &follow.FollowerID, &follow.FollowingID, &follow.Status, &follow.CreatedAt, &follow.UpdatedAt)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("follow relationship not found")
@@ -119,7 +116,6 @@ func (s *FollowService) UpdateStatus(id string, status FollowStatus) error {
 		SET status = ?, updated_at = ?
 		WHERE id = ?
 	`, status, time.Now(), id)
-
 	if err != nil {
 		return fmt.Errorf("failed to update follow status: %w", err)
 	}
@@ -133,7 +129,6 @@ func (s *FollowService) Delete(followerID, followingID string) error {
 		DELETE FROM follows
 		WHERE follower_id = ? AND following_id = ?
 	`, followerID, followingID)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete follow: %w", err)
 	}
@@ -150,7 +145,6 @@ func (s *FollowService) GetFollowers(userID string, limit, offset int) ([]*User,
 		WHERE f.following_id = ? AND f.status = ?
 		LIMIT ? OFFSET ?
 	`, userID, FollowStatusAccepted, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get followers: %w", err)
 	}
@@ -182,7 +176,6 @@ func (s *FollowService) GetFollowing(userID string, limit, offset int) ([]*User,
 		WHERE f.follower_id = ? AND f.status = ?
 		LIMIT ? OFFSET ?
 	`, userID, FollowStatusAccepted, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get following: %w", err)
 	}
@@ -212,7 +205,6 @@ func (s *FollowService) GetFollowRequests(userID string) ([]*Follow, error) {
 		FROM follows
 		WHERE following_id = ? AND status = ?
 	`, userID, FollowStatusPending)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get follow requests: %w", err)
 	}
@@ -243,7 +235,6 @@ func (s *FollowService) IsFollowing(followerID, followingID string) (bool, error
 		FROM follows
 		WHERE follower_id = ? AND following_id = ? AND status = ?
 	`, followerID, followingID, FollowStatusAccepted).Scan(&count)
-
 	if err != nil {
 		return false, fmt.Errorf("failed to check if following: %w", err)
 	}
@@ -259,7 +250,6 @@ func (s *FollowService) GetFollowersCount(userID string) (int, error) {
 		FROM follows
 		WHERE following_id = ? AND status = ?
 	`, userID, FollowStatusAccepted).Scan(&count)
-
 	if err != nil {
 		return 0, fmt.Errorf("failed to get followers count: %w", err)
 	}
@@ -275,10 +265,42 @@ func (s *FollowService) GetFollowingCount(userID string) (int, error) {
 		FROM follows
 		WHERE follower_id = ? AND status = ?
 	`, userID, FollowStatusAccepted).Scan(&count)
-
 	if err != nil {
 		return 0, fmt.Errorf("failed to get following count: %w", err)
 	}
 
 	return count, nil
+}
+
+// GetFollowStatus returns the follow status between two users
+func (s *FollowService) GetFollowStatus(followerID, followingID string) (FollowStatus, error) {
+	var status FollowStatus
+	err := s.DB.QueryRow(`
+		SELECT status
+		FROM follows
+		WHERE follower_id = ? AND following_id = ?
+	`, followerID, followingID).Scan(&status)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", errors.New("follow relationship not found")
+		}
+		return "", fmt.Errorf("failed to get follow status: %w", err)
+	}
+
+	return status, nil
+}
+
+// HasPendingRequest checks if there's a pending follow request between two users
+func (s *FollowService) HasPendingRequest(followerID, followingID string) (bool, error) {
+	var count int
+	err := s.DB.QueryRow(`
+		SELECT COUNT(*)
+		FROM follows
+		WHERE follower_id = ? AND following_id = ? AND status = ?
+	`, followerID, followingID, FollowStatusPending).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check pending request: %w", err)
+	}
+
+	return count > 0, nil
 }

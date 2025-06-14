@@ -23,11 +23,15 @@ func (h *Handler) GetComments(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	postID := vars["id"]
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context (authenticated user required)
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	// Check if post exists and user can view it
-	_, err := h.PostService.GetByID(postID, currentUserID)
+	_, err = h.PostService.GetByID(postID, currentUserID)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
 		return

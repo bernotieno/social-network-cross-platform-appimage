@@ -25,6 +25,12 @@ type UpdateProfileRequest struct {
 
 // GetUsers handles retrieving a list of users
 func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
+	// Get current user ID from context (authenticated user required)
+	_, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 	// Parse query parameters
 	query := r.URL.Query().Get("q")
 	limitStr := r.URL.Query().Get("limit")
@@ -72,8 +78,12 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context (authenticated user required)
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	// Get user
 	user, err := h.UserService.GetByID(userID)
@@ -85,27 +95,52 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	// Remove password from response
 	user.Password = ""
 
-	// Check if current user is following this user
+	// Check if current user is following this user and get follow status
 	isFollowing := false
-	if currentUserID != "" && currentUserID != userID {
+	hasPendingRequest := false
+	followStatus := ""
+	if currentUserID != userID {
 		isFollowing, err = h.FollowService.IsFollowing(currentUserID, userID)
 		if err != nil {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check follow status")
 			return
 		}
+
+		// Check for pending request
+		hasPendingRequest, err = h.FollowService.HasPendingRequest(currentUserID, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check pending request")
+			return
+		}
+
+		// Get follow status if there's a relationship
+		if isFollowing || hasPendingRequest {
+			status, err := h.FollowService.GetFollowStatus(currentUserID, userID)
+			if err == nil {
+				followStatus = string(status)
+			}
+		}
 	}
 
 	// Check if the viewer is authorized to see full profile data
-	isAuthorized := true
-	if user.IsPrivate && currentUserID != userID {
+	isOwnProfile := currentUserID == userID
+	isAuthorized := false
+	// Users can always see their own full profile
+	if isOwnProfile {
+		isAuthorized = true
+	} else if user.IsPrivate {
 		// For private profiles, only followers can see full data
 		isAuthorized = isFollowing
+	} else {
+		// For public profiles, everyone can see full data
+		isAuthorized = true
 	}
 
 	// Create filtered user data based on authorization
 	var userData map[string]interface{}
-	if isAuthorized {
-		// Full profile data for authorized viewers
+
+	if isOwnProfile {
+		// For own profile, always return ALL data including sensitive information
 		userData = map[string]interface{}{
 			"id":             user.ID,
 			"username":       user.Username,
@@ -120,6 +155,25 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 			"isPrivate":      user.IsPrivate,
 			"createdAt":      user.CreatedAt,
 			"updatedAt":      user.UpdatedAt,
+			"isOwnProfile":   true,
+		}
+	} else if isAuthorized {
+		// Full profile data for authorized viewers (followers of private profiles, or anyone for public profiles)
+		// But exclude sensitive information like email
+		userData = map[string]interface{}{
+			"id":             user.ID,
+			"username":       user.Username,
+			"fullName":       user.FullName,
+			"firstName":      user.FirstName,
+			"lastName":       user.LastName,
+			"dateOfBirth":    user.DateOfBirth,
+			"bio":            user.Bio,
+			"profilePicture": user.ProfilePicture,
+			"coverPhoto":     user.CoverPhoto,
+			"isPrivate":      user.IsPrivate,
+			"createdAt":      user.CreatedAt,
+			"updatedAt":      user.UpdatedAt,
+			"isOwnProfile":   false,
 		}
 	} else {
 		// Limited profile data for unauthorized viewers of private profiles
@@ -131,12 +185,13 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 			"coverPhoto":     user.CoverPhoto,
 			"isPrivate":      user.IsPrivate,
 			"createdAt":      user.CreatedAt,
+			"isOwnProfile":   false,
 		}
 	}
 
-	// Get follower and following counts (only for authorized viewers)
+	// Get follower and following counts (for own profile or authorized viewers)
 	var followersCount, followingCount int
-	if isAuthorized {
+	if isOwnProfile || isAuthorized {
 		followersCount, err = h.FollowService.GetFollowersCount(userID)
 		if err != nil {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get followers count")
@@ -155,15 +210,17 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 		"user": userData,
 	}
 
-	// Add stats only for authorized viewers
-	if isAuthorized {
+	// Add stats for own profile or authorized viewers
+	if isOwnProfile || isAuthorized {
 		response["followersCount"] = followersCount
 		response["followingCount"] = followingCount
 	}
 
-	// Add follow status if authenticated
-	if currentUserID != "" {
+	// Add follow status if not viewing own profile
+	if !isOwnProfile {
 		response["isFollowedByCurrentUser"] = isFollowing
+		response["hasPendingFollowRequest"] = hasPendingRequest
+		response["followStatus"] = followStatus
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "User retrieved successfully", response)
@@ -442,10 +499,13 @@ func (h *Handler) FollowUser(w http.ResponseWriter, r *http.Request) {
 	// Create notification for the target user
 	var notificationType models.NotificationType
 	var notificationContent string
+	var notificationData string
 
 	if followingUser.IsPrivate {
 		notificationType = models.NotificationTypeFollowRequest
 		notificationContent = "requested to follow you"
+		// Store the follow request ID in the notification data
+		notificationData = `{"followRequestId":"` + follow.ID + `"}`
 	} else {
 		notificationType = models.NotificationTypeNewFollower
 		notificationContent = "started following you"
@@ -456,6 +516,7 @@ func (h *Handler) FollowUser(w http.ResponseWriter, r *http.Request) {
 		SenderID: followerID,
 		Type:     notificationType,
 		Content:  notificationContent,
+		Data:     notificationData,
 	}
 
 	if err := h.NotificationService.Create(notification); err != nil {
@@ -519,8 +580,35 @@ func (h *Handler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context (authenticated user required)
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Check if the target user has a private profile
+	targetUser, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Check if current user is authorized to view followers
+	isOwnProfile := currentUserID == userID
+	if targetUser.IsPrivate && !isOwnProfile {
+		// For private profiles, check if current user is a follower
+		isFollowing, err := h.FollowService.IsFollowing(currentUserID, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check follow status")
+			return
+		}
+		
+		if !isFollowing {
+			utils.RespondWithError(w, http.StatusForbidden, "Not authorized to view followers of this private account")
+			return
+		}
+	}
 
 	// Get followers
 	followers, err := h.FollowService.GetFollowers(userID, limit, offset)
@@ -549,7 +637,7 @@ func (h *Handler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Check if current user is following this follower
-		if currentUserID != "" && currentUserID != user.ID {
+		if currentUserID != user.ID {
 			isFollowing, err := h.FollowService.IsFollowing(currentUserID, user.ID)
 			if err == nil {
 				userMap["isFollowing"] = isFollowing
@@ -593,8 +681,35 @@ func (h *Handler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get current user ID from context (if authenticated)
-	currentUserID, _ := middleware.GetUserID(r)
+	// Get current user ID from context (authenticated user required)
+	currentUserID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Check if the target user has a private profile
+	targetUser, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Check if current user is authorized to view following list
+	isOwnProfile := currentUserID == userID
+	if targetUser.IsPrivate && !isOwnProfile {
+		// For private profiles, check if current user is a follower
+		isFollowing, err := h.FollowService.IsFollowing(currentUserID, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check follow status")
+			return
+		}
+		
+		if !isFollowing {
+			utils.RespondWithError(w, http.StatusForbidden, "Not authorized to view following list of this private account")
+			return
+		}
+	}
 
 	// Get following
 	following, err := h.FollowService.GetFollowing(userID, limit, offset)
@@ -623,7 +738,7 @@ func (h *Handler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Check if current user is following this user (should be true for following list)
-		if currentUserID != "" && currentUserID != user.ID {
+		if currentUserID != user.ID {
 			isFollowing, err := h.FollowService.IsFollowing(currentUserID, user.ID)
 			if err == nil {
 				userMap["isFollowing"] = isFollowing

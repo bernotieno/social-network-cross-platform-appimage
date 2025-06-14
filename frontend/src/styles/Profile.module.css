@@ -313,6 +313,27 @@
   margin: 0.5rem 0;
 }
 
+/* Privacy-related styles */
+.privateProfileMessage {
+  padding: 1rem;
+  background-color: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.privateProfileMessage p {
+  color: #92400e;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.privacyRestricted {
+  margin: 2rem 0;
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
   .profileInfo {
