@@ -95,13 +95,30 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	// Remove password from response
 	user.Password = ""
 
-	// Check if current user is following this user
+	// Check if current user is following this user and get follow status
 	isFollowing := false
+	hasPendingRequest := false
+	followStatus := ""
 	if currentUserID != userID {
 		isFollowing, err = h.FollowService.IsFollowing(currentUserID, userID)
 		if err != nil {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check follow status")
 			return
+		}
+
+		// Check for pending request
+		hasPendingRequest, err = h.FollowService.HasPendingRequest(currentUserID, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check pending request")
+			return
+		}
+
+		// Get follow status if there's a relationship
+		if isFollowing || hasPendingRequest {
+			status, err := h.FollowService.GetFollowStatus(currentUserID, userID)
+			if err == nil {
+				followStatus = string(status)
+			}
 		}
 	}
 
@@ -202,6 +219,8 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	// Add follow status if not viewing own profile
 	if !isOwnProfile {
 		response["isFollowedByCurrentUser"] = isFollowing
+		response["hasPendingFollowRequest"] = hasPendingRequest
+		response["followStatus"] = followStatus
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "User retrieved successfully", response)
@@ -480,10 +499,13 @@ func (h *Handler) FollowUser(w http.ResponseWriter, r *http.Request) {
 	// Create notification for the target user
 	var notificationType models.NotificationType
 	var notificationContent string
+	var notificationData string
 
 	if followingUser.IsPrivate {
 		notificationType = models.NotificationTypeFollowRequest
 		notificationContent = "requested to follow you"
+		// Store the follow request ID in the notification data
+		notificationData = `{"followRequestId":"` + follow.ID + `"}`
 	} else {
 		notificationType = models.NotificationTypeNewFollower
 		notificationContent = "started following you"
@@ -494,6 +516,7 @@ func (h *Handler) FollowUser(w http.ResponseWriter, r *http.Request) {
 		SenderID: followerID,
 		Type:     notificationType,
 		Content:  notificationContent,
+		Data:     notificationData,
 	}
 
 	if err := h.NotificationService.Create(notification); err != nil {

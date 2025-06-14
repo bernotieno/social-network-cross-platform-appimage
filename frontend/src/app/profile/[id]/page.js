@@ -5,10 +5,12 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { userAPI, postAPI } from '@/utils/api';
 import { getUserProfilePictureUrl, getUserCoverPhotoUrl, getFallbackAvatar } from '@/utils/images';
+import { canViewFullProfile, canViewPosts, canViewFollowers, canViewFollowing, getFollowButtonState } from '@/utils/privacy';
 import Button from '@/components/Button';
 import Post from '@/components/Post';
 import UserCard from '@/components/UserCard';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { PrivacyEmptyState } from '@/components/PrivacyRestricted';
 import styles from '@/styles/Profile.module.css';
 
 export default function ProfilePage() {
@@ -24,6 +26,7 @@ export default function ProfilePage() {
   const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
   const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -43,6 +46,12 @@ export default function ProfilePage() {
   const [updateMessage, setUpdateMessage] = useState(null);
 
   const isOwnProfile = currentUser?.id === id;
+
+  // Privacy-related computed values - with safe defaults
+  const canViewProfile = currentUser && profile ? canViewFullProfile(profile, currentUser) : false;
+  const canViewUserPosts = currentUser && profile ? canViewPosts(profile, currentUser) : isOwnProfile;
+  const canViewUserFollowers = currentUser && profile ? canViewFollowers(profile, currentUser) : isOwnProfile;
+  const canViewUserFollowing = currentUser && profile ? canViewFollowing(profile, currentUser) : isOwnProfile;
 
   useEffect(() => {
     fetchProfileData();
@@ -88,15 +97,22 @@ export default function ProfilePage() {
       // Check if current user is following this profile
       if (currentUser && !isOwnProfile) {
         setIsFollowing(profileResponse.data.data.isFollowedByCurrentUser || false);
+        setHasPendingRequest(profileResponse.data.data.hasPendingFollowRequest || false);
       }
 
       // Set followers and following counts
       setFollowersCount(profileResponse.data.data.followersCount || 0);
       setFollowingCount(profileResponse.data.data.followingCount || 0);
 
-      // Fetch user posts
-      const postsResponse = await postAPI.getPosts(id);
-      setPosts(postsResponse.data.data.posts || []);
+      // Fetch user posts - always try to fetch, let the backend handle authorization
+      try {
+        const postsResponse = await postAPI.getPosts(id);
+        setPosts(postsResponse.data.data.posts || []);
+      } catch (error) {
+        // If unauthorized or error, set empty posts
+        console.log('Could not fetch posts:', error.response?.status);
+        setPosts([]);
+      }
     } catch (error) {
       console.error('Error fetching profile data:', error);
     } finally {
@@ -106,24 +122,59 @@ export default function ProfilePage() {
 
   const handleFollow = async () => {
     try {
-      if (isFollowing) {
-        await userAPI.unfollow(id);
-        setIsFollowing(false);
-        setFollowersCount(prev => prev - 1);
+      // Create a profile-like object for the button state function
+      const profileData = {
+        user: profile?.user,
+        isFollowedByCurrentUser: isFollowing,
+        hasPendingFollowRequest: hasPendingRequest,
+        followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : '')
+      };
 
-        // Remove current user from followers list if it's loaded
-        if (followers.length > 0) {
-          setFollowers(prev => prev.filter(follower => follower.id !== currentUser?.id));
-        }
-      } else {
-        await userAPI.follow(id);
-        setIsFollowing(true);
-        setFollowersCount(prev => prev + 1);
+      const buttonState = getFollowButtonState(profileData, currentUser);
 
-        // Add current user to followers list if it's loaded
-        if (followers.length > 0 && currentUser) {
-          setFollowers(prev => [currentUser, ...prev]);
-        }
+      switch (buttonState.action) {
+        case 'unfollow':
+          await userAPI.unfollow(id);
+          setIsFollowing(false);
+          setHasPendingRequest(false);
+          setFollowersCount(prev => prev - 1);
+
+          // Remove current user from followers list if it's loaded
+          if (followers.length > 0) {
+            setFollowers(prev => prev.filter(follower => follower.id !== currentUser?.id));
+          }
+          break;
+
+        case 'follow':
+        case 'request_follow':
+          await userAPI.follow(id);
+          if (profile?.user?.isPrivate) {
+            // For private users, set pending request
+            setHasPendingRequest(true);
+            setIsFollowing(false);
+            // Don't increment followers count for pending requests
+          } else {
+            // For public users, set following
+            setIsFollowing(true);
+            setHasPendingRequest(false);
+            setFollowersCount(prev => prev + 1);
+
+            // Add current user to followers list if it's loaded
+            if (followers.length > 0 && currentUser) {
+              setFollowers(prev => [currentUser, ...prev]);
+            }
+          }
+          break;
+
+        case 'cancel_request':
+          await userAPI.unfollow(id);
+          setHasPendingRequest(false);
+          setIsFollowing(false);
+          // Don't decrement followers count as it wasn't incremented for pending requests
+          break;
+
+        default:
+          break;
       }
     } catch (error) {
       console.error('Error following/unfollowing user:', error);
@@ -133,6 +184,8 @@ export default function ProfilePage() {
   const fetchFollowers = async () => {
     try {
       setIsLoadingFollowers(true);
+
+      // Try to fetch followers - let the backend handle authorization
       const response = await userAPI.getFollowers(id);
       setFollowers(response.data.data.followers || []);
     } catch (error) {
@@ -146,6 +199,8 @@ export default function ProfilePage() {
   const fetchFollowing = async () => {
     try {
       setIsLoadingFollowing(true);
+
+      // Try to fetch following - let the backend handle authorization
       const response = await userAPI.getFollowing(id);
       setFollowing(response.data.data.following || []);
     } catch (error) {
@@ -478,45 +533,69 @@ export default function ProfilePage() {
                 </span>
               </div>
 
-              {profile.user.email && (
-                <p className={styles.profileBio}>{profile.user.email}</p>
-              )}
-              {profile.user.bio && (
-                <p className={styles.profileBio}>{profile.user.bio}</p>
-              )}
+              {/* Show full profile details only if authorized */}
+              {canViewProfile ? (
+                <>
+                  {profile.user.email && isOwnProfile && (
+                    <p className={styles.profileBio}>{profile.user.email}</p>
+                  )}
+                  {profile.user.bio && (
+                    <p className={styles.profileBio}>{profile.user.bio}</p>
+                  )}
 
-              {profile.user.dateOfBirth && (
-                <p className={styles.profileBirthdate}>
-                  Born: {new Date(profile.user.dateOfBirth).toLocaleDateString()}
-                </p>
-              )}
+                  {profile.user.dateOfBirth && (
+                    <p className={styles.profileBirthdate}>
+                      Born: {new Date(profile.user.dateOfBirth).toLocaleDateString()}
+                    </p>
+                  )}
 
-              <div className={styles.profileStats}>
-                <div className={styles.stat}>
-                  <span className={styles.statCount}>{posts.length}</span>
-                  <span className={styles.statLabel}>Posts</span>
+                  <div className={styles.profileStats}>
+                    <div className={styles.stat}>
+                      <span className={styles.statCount}>{canViewUserPosts ? posts.length : '—'}</span>
+                      <span className={styles.statLabel}>Posts</span>
+                    </div>
+                    <div className={styles.stat}>
+                      <span className={styles.statCount}>{canViewUserFollowers ? followersCount : '—'}</span>
+                      <span className={styles.statLabel}>Followers</span>
+                    </div>
+                    <div className={styles.stat}>
+                      <span className={styles.statCount}>{canViewUserFollowing ? followingCount : '—'}</span>
+                      <span className={styles.statLabel}>Following</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className={styles.privateProfileMessage}>
+                  <p>This account is private. Follow @{profile.user.username} to see their profile information.</p>
                 </div>
-                <div className={styles.stat}>
-                  <span className={styles.statCount}>{followersCount}</span>
-                  <span className={styles.statLabel}>Followers</span>
-                </div>
-                <div className={styles.stat}>
-                  <span className={styles.statCount}>{followingCount}</span>
-                  <span className={styles.statLabel}>Following</span>
-                </div>
-              </div>
+              )}
             </div>
 
             <div className={styles.profileActions}>
               {isOwnProfile ? (
                 <Button variant="outline" onClick={handleEditProfile}>Edit Profile</Button>
               ) : (
-                <Button
-                  variant={isFollowing ? 'secondary' : 'primary'}
-                  onClick={handleFollow}
-                >
-                  {isFollowing ? 'Unfollow' : 'Follow'}
-                </Button>
+                (() => {
+                  // Create a profile-like object for the button state function
+                  const profileData = {
+                    user: profile?.user,
+                    isFollowedByCurrentUser: isFollowing,
+                    hasPendingFollowRequest: hasPendingRequest,
+                    followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : '')
+                  };
+
+                  const buttonState = getFollowButtonState(profileData, currentUser);
+
+                  return (
+                    <Button
+                      variant={buttonState.variant}
+                      onClick={handleFollow}
+                      disabled={buttonState.disabled}
+                    >
+                      {buttonState.text}
+                    </Button>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -548,12 +627,21 @@ export default function ProfilePage() {
             {activeTab === 'posts' && (
               <div className={styles.postsGrid}>
                 {posts.length === 0 ? (
-                  <div className={styles.emptyState}>
-                    <p>No posts yet</p>
-                    {isOwnProfile && (
-                      <p>Share your first post to get started!</p>
-                    )}
-                  </div>
+                  // Check if we should show privacy message or empty state
+                  !canViewUserPosts && profile && !isOwnProfile ? (
+                    <PrivacyEmptyState
+                      contentType="posts"
+                      profile={profile}
+                      className={styles.privacyRestricted}
+                    />
+                  ) : (
+                    <div className={styles.emptyState}>
+                      <p>No posts yet</p>
+                      {isOwnProfile && (
+                        <p>Share your first post to get started!</p>
+                      )}
+                    </div>
+                  )
                 ) : (
                   <div className={styles.postsList}>
                     {posts.map(post => (
@@ -582,9 +670,18 @@ export default function ProfilePage() {
                     <p>Loading followers...</p>
                   </div>
                 ) : followers.length === 0 ? (
-                  <div className={styles.emptyState}>
-                    <p>No followers yet</p>
-                  </div>
+                  // Check if we should show privacy message or empty state
+                  !canViewUserFollowers && profile && !isOwnProfile ? (
+                    <PrivacyEmptyState
+                      contentType="followers"
+                      profile={profile}
+                      className={styles.privacyRestricted}
+                    />
+                  ) : (
+                    <div className={styles.emptyState}>
+                      <p>No followers yet</p>
+                    </div>
+                  )
                 ) : (
                   <div className={styles.usersList}>
                     {followers.map(follower => (
@@ -614,9 +711,18 @@ export default function ProfilePage() {
                     <p>Loading following...</p>
                   </div>
                 ) : following.length === 0 ? (
-                  <div className={styles.emptyState}>
-                    <p>Not following anyone yet</p>
-                  </div>
+                  // Check if we should show privacy message or empty state
+                  !canViewUserFollowing && profile && !isOwnProfile ? (
+                    <PrivacyEmptyState
+                      contentType="following"
+                      profile={profile}
+                      className={styles.privacyRestricted}
+                    />
+                  ) : (
+                    <div className={styles.emptyState}>
+                      <p>Not following anyone yet</p>
+                    </div>
+                  )
                 ) : (
                   <div className={styles.usersList}>
                     {following.map(followedUser => (

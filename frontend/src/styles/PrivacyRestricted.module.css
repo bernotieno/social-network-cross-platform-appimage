@@ -1,0 +1,267 @@
+/* Privacy Restricted Container */
+.restrictedContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e4e6ea;
+}
+
+.restrictedContent {
+  text-align: center;
+  max-width: 400px;
+}
+
+.lockIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
+
+.restrictedTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1c1e21;
+  margin-bottom: 0.5rem;
+}
+
+.restrictedMessage {
+  font-size: 1rem;
+  color: #65676b;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.actionContainer {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.followButton {
+  min-width: 120px;
+}
+
+.additionalContent {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e4e6ea;
+}
+
+/* Blurred Content */
+.blurredContainer {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.blurredContent {
+  filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.blurredOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(2px);
+}
+
+.overlayContent {
+  text-align: center;
+  padding: 1rem;
+}
+
+.overlayMessage {
+  font-size: 0.9rem;
+  color: #65676b;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 150px;
+  padding: 2rem;
+  text-align: center;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e4e6ea;
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.emptyMessage {
+  font-size: 1rem;
+  color: #65676b;
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+/* Limited Profile Info */
+.limitedProfile {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e4e6ea;
+  margin-bottom: 1rem;
+}
+
+.limitedInfo {
+  flex: 1;
+}
+
+.limitedName {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1c1e21;
+  margin-bottom: 0.25rem;
+}
+
+.limitedUsername {
+  font-size: 1rem;
+  color: #65676b;
+  margin-bottom: 0.75rem;
+}
+
+.privacyIndicator {
+  display: flex;
+  align-items: center;
+}
+
+.privateTag {
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.limitedActions {
+  flex-shrink: 0;
+  margin-left: 1rem;
+}
+
+/* Privacy Status Indicators */
+.privacyStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+}
+
+.privacyStatus.private {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.privacyStatus.public {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .restrictedContainer {
+    padding: 1.5rem;
+    min-height: 150px;
+  }
+
+  .lockIcon {
+    font-size: 2.5rem;
+  }
+
+  .restrictedTitle {
+    font-size: 1.25rem;
+  }
+
+  .restrictedMessage {
+    font-size: 0.9rem;
+  }
+
+  .limitedProfile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .limitedActions {
+    margin-left: 0;
+    align-self: stretch;
+  }
+
+  .followButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .restrictedContainer {
+    padding: 1rem;
+  }
+
+  .emptyState {
+    padding: 1.5rem;
+    min-height: 120px;
+  }
+
+  .emptyIcon {
+    font-size: 2rem;
+  }
+
+  .emptyMessage {
+    font-size: 0.9rem;
+  }
+}
+
+/* Animation for smooth transitions */
+.restrictedContainer,
+.blurredContainer,
+.emptyState,
+.limitedProfile {
+  transition: all 0.3s ease;
+}
+
+.blurredOverlay {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

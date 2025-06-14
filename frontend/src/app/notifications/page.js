@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import useNotifications from '@/hooks/useNotifications';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
-import { groupAPI } from '@/utils/api';
+import { groupAPI, userAPI } from '@/utils/api';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -57,14 +57,14 @@ export default function Notifications() {
               <Button
                 variant="primary"
                 size="small"
-                onClick={() => handleFollowResponse(notification.id, true)}
+                onClick={() => handleFollowResponse(notification, true)}
               >
                 Accept
               </Button>
               <Button
                 variant="secondary"
                 size="small"
-                onClick={() => handleFollowResponse(notification.id, false)}
+                onClick={() => handleFollowResponse(notification, false)}
               >
                 Decline
               </Button>
@@ -199,10 +199,44 @@ export default function Notifications() {
     }
   };
 
-  // These functions would call the appropriate API endpoints
-  const handleFollowResponse = (notificationId, accept) => {
-    console.log(`Follow request ${accept ? 'accepted' : 'declined'}: ${notificationId}`);
-    markAsRead(notificationId);
+  // Handle follow request response
+  const handleFollowResponse = async (notification, accept) => {
+    try {
+      // Extract follow request ID from notification data
+      let followRequestId = notification.id; // fallback to notification ID
+
+      if (notification.data) {
+        try {
+          const data = JSON.parse(notification.data);
+          if (data.followRequestId) {
+            followRequestId = data.followRequestId;
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse notification data:', parseError);
+        }
+      }
+
+      // Call the API to respond to the follow request
+      await userAPI.respondToFollowRequest(followRequestId, accept);
+
+      // Mark notification as read and refresh notifications
+      markAsRead(notification.id);
+      fetchNotifications();
+
+      // Show success message
+      showAlert({
+        type: 'success',
+        title: 'Success',
+        message: `Follow request ${accept ? 'accepted' : 'declined'} successfully!`
+      });
+    } catch (error) {
+      console.error('Error responding to follow request:', error);
+      showAlert({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.message || 'Failed to respond to follow request. Please try again.'
+      });
+    }
   };
 
   const handleGroupInviteResponse = async (notificationId, accept) => {
