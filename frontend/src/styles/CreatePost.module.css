@@ -194,6 +194,23 @@
   gap: 4px;
 }
 
+/* Privacy Description */
+.privacyDescription {
+  margin-top: 0.5rem;
+}
+
+.privacyNote {
+  font-size: 13px;
+  color: #666;
+  background-color: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid #007bff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Custom Visibility Section */
 .customVisibilitySection {
   background-color: #f8f9fa;
