@@ -14,13 +14,16 @@ import (
 	"github.com/bernaotieno/social-network/backend/pkg/db/sqlite"
 	"github.com/bernaotieno/social-network/backend/pkg/handlers"
 	"github.com/bernaotieno/social-network/backend/pkg/middleware"
+	"github.com/bernaotieno/social-network/backend/pkg/utils"
 	"github.com/bernaotieno/social-network/backend/pkg/websocket"
 	"github.com/gorilla/mux"
 )
 
+
 func main() {
 	// Parse command line flags
 	var (
+		
 		port           = flag.String("port", "8080", "Server port")
 		dbPath         = flag.String("db", "./social_network.db", "SQLite database path")
 		migrationsPath = flag.String("migrations", "./pkg/db/migrations/sqlite", "Path to migrations directory")
@@ -33,6 +36,13 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Initialize logger
+	if logFile, err := utils.SetupLogFile(); err != nil {
+		log.Fatalf("Failed to setup logger: %v", err)
+	} else {
+		defer logFile.Close()
+	}
 
 	// Run migrations
 	if err := sqlite.RunMigrations(*dbPath, *migrationsPath); err != nil {
