@@ -241,6 +241,13 @@ export default function ProfilePage() {
   const handleProfilePicChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        console.error(validation.error);
+        return;
+      }
+
       setProfilePicFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -253,6 +260,13 @@ export default function ProfilePage() {
   const handleCoverPhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        console.error(validation.error);
+        return;
+      }
+
       setCoverPhotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -483,7 +497,7 @@ export default function ProfilePage() {
                 <span>📷</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleCoverPhotoChange}
                   style={{ display: 'none' }}
                 />
@@ -514,7 +528,7 @@ export default function ProfilePage() {
                   <span>📷</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/gif"
                     onChange={handleProfilePicChange}
                     style={{ display: 'none' }}
                   />
@@ -829,7 +843,7 @@ export default function ProfilePage() {
                 <input
                   type="file"
                   id="profilePic"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleProfilePicChange}
                   className={styles.fileInput}
                 />
@@ -845,7 +859,7 @@ export default function ProfilePage() {
                 <input
                   type="file"
                   id="coverPhoto"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleCoverPhotoChange}
                   className={styles.fileInput}
                 />

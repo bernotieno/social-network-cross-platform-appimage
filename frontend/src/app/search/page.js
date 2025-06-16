@@ -40,12 +40,12 @@ export default function SearchPage() {
 
     try {
       const response = await userAPI.searchUsers(query);
-      
+
       // Filter out current user from results
       const filteredResults = response.data.data.users.filter(
-        searchUser => searchUser.id !== user?.id
+        (searchUser) => searchUser.id !== user?.id
       );
-      
+
       setSearchResults(filteredResults);
     } catch (error) {
       console.error('Error searching users:', error);
@@ -53,17 +53,6 @@ export default function SearchPage() {
     } finally {
       setIsSearching(false);
     }
-  };
-
-  const handleFollowChange = (userId, isFollowing) => {
-    // Update the follow status in search results
-    setSearchResults(prev => 
-      prev.map(user => 
-        user.id === userId 
-          ? { ...user, isFollowing } 
-          : user
-      )
-    );
   };
 
   return (
@@ -85,9 +74,7 @@ export default function SearchPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className={styles.searchInput}
             />
-            <div className={styles.searchIcon}>
-              🔍
-            </div>
+            <div className={styles.searchIcon}>🔍</div>
           </div>
         </div>
 
@@ -103,7 +90,9 @@ export default function SearchPage() {
             <div className={styles.noResults}>
               <div className={styles.noResultsIcon}>👥</div>
               <h3>No users found</h3>
-              <p>Try searching with different keywords or check your spelling.</p>
+              <p>
+                Try searching with different keywords or check your spelling.
+              </p>
             </div>
           )}
 
@@ -121,12 +110,11 @@ export default function SearchPage() {
                 <h3>Search Results ({searchResults.length})</h3>
               </div>
               <div className={styles.usersList}>
-                {searchResults.map(searchUser => (
+                {searchResults.map((searchUser) => (
                   <UserCard
                     key={searchUser.id}
                     user={searchUser}
-                    showFollowButton={true}
-                    onFollowChange={handleFollowChange}
+                    showFollowButton={false}
                   />
                 ))}
               </div>

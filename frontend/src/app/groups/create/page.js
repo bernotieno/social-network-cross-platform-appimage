@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { groupAPI } from '@/utils/api';
+import { isGif, validateImageFile } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -34,6 +35,13 @@ export default function CreateGroup() {
   const handleCoverPhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        showError(validation.error, 'Invalid File');
+        return;
+      }
+
       setCoverPhoto(file);
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -102,12 +110,27 @@ export default function CreateGroup() {
               <div className={styles.coverPhotoContainer}>
                 {coverPhotoPreview ? (
                   <div className={styles.coverPhotoPreview}>
-                    <Image
-                      src={coverPhotoPreview}
-                      alt="Cover photo preview"
-                      fill
-                      style={{ objectFit: 'cover' }}
-                    />
+                    {coverPhoto && isGif(coverPhoto.name) ? (
+                      // Use regular img tag for GIFs to preserve animation
+                      <img
+                        src={coverPhotoPreview}
+                        alt="Cover photo preview"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                      />
+                    ) : (
+                      // Use Next.js Image for static images
+                      <Image
+                        src={coverPhotoPreview}
+                        alt="Cover photo preview"
+                        fill
+                        style={{ objectFit: 'cover' }}
+                      />
+                    )}
                     <button
                       type="button"
                       className={styles.removeCoverPhoto}
@@ -127,7 +150,7 @@ export default function CreateGroup() {
                 )}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif"
                   onChange={handleCoverPhotoChange}
                   className={styles.fileInput}
                   id="coverPhoto"

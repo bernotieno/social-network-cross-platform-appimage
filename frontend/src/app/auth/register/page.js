@@ -287,7 +287,7 @@ export default function Register() {
             <input
               type="file"
               id="avatar"
-              accept="image/*"
+              accept="image/jpeg,image/jpg,image/png,image/gif"
               onChange={handleAvatarChange}
               className={styles.fileInput}
             />

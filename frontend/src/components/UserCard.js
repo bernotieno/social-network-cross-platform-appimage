@@ -12,17 +12,50 @@ import styles from '@/styles/UserCard.module.css';
 
 export default function UserCard({ user, showFollowButton = true, onFollowChange }) {
   const { user: currentUser } = useAuth();
-  const [isFollowing, setIsFollowing] = useState(user.isFollowing || false);
-  const [hasPendingRequest, setHasPendingRequest] = useState(user.hasPendingFollowRequest || false);
+  
+  // Initialize state with more comprehensive checks for follow status
+  const getInitialFollowState = () => {
+    return user.isFollowing || 
+           user.isFollowedByCurrentUser || 
+           user.followedByCurrentUser ||
+           false;
+  };
+
+  const getInitialPendingState = () => {
+    return user.hasPendingFollowRequest || 
+           user.pendingFollowRequest ||
+           user.followStatus === 'pending' ||
+           false;
+  };
+
+  const [isFollowing, setIsFollowing] = useState(getInitialFollowState());
+  const [hasPendingRequest, setHasPendingRequest] = useState(getInitialPendingState());
   const [isLoading, setIsLoading] = useState(false);
 
   const isOwnProfile = currentUser?.id === user.id;
 
-  // Update follow state when user prop changes
+  // Update follow state when user prop changes - with more comprehensive checks
   useEffect(() => {
-    setIsFollowing(user.isFollowing || false);
-    setHasPendingRequest(user.hasPendingFollowRequest || false);
-  }, [user.isFollowing, user.hasPendingFollowRequest]);
+    const newIsFollowing = user.isFollowing || 
+                          user.isFollowedByCurrentUser || 
+                          user.followedByCurrentUser ||
+                          false;
+    
+    const newHasPendingRequest = user.hasPendingFollowRequest || 
+                                user.pendingFollowRequest ||
+                                user.followStatus === 'pending' ||
+                                false;
+
+    setIsFollowing(newIsFollowing);
+    setHasPendingRequest(newHasPendingRequest);
+  }, [
+    user.isFollowing, 
+    user.isFollowedByCurrentUser, 
+    user.followedByCurrentUser,
+    user.hasPendingFollowRequest, 
+    user.pendingFollowRequest,
+    user.followStatus
+  ]);
 
   const handleFollow = async () => {
     if (isLoading || isOwnProfile) return;
@@ -35,7 +68,10 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
         user: user,
         isFollowedByCurrentUser: isFollowing,
         hasPendingFollowRequest: hasPendingRequest,
-        followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : '')
+        followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : ''),
+        // Add these additional properties for better compatibility
+        isFollowing: isFollowing,
+        pendingFollowRequest: hasPendingRequest
       };
 
       const buttonState = getFollowButtonState(profileData, currentUser);
@@ -132,7 +168,10 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
               user: user,
               isFollowedByCurrentUser: isFollowing,
               hasPendingFollowRequest: hasPendingRequest,
-              followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : '')
+              followStatus: hasPendingRequest ? 'pending' : (isFollowing ? 'accepted' : ''),
+              // Add these additional properties for better compatibility
+              isFollowing: isFollowing,
+              pendingFollowRequest: hasPendingRequest
             };
 
             const buttonState = getFollowButtonState(profileData, currentUser);

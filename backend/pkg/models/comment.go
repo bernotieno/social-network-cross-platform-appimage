@@ -15,6 +15,7 @@ type Comment struct {
 	PostID    string    `json:"postId"`
 	UserID    string    `json:"userId"`
 	Content   string    `json:"content"`
+	Image     string    `json:"image,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	// Additional fields for API responses
@@ -39,9 +40,9 @@ func (s *CommentService) Create(comment *Comment) error {
 	comment.UpdatedAt = now
 
 	_, err := s.DB.Exec(`
-		INSERT INTO comments (id, post_id, user_id, content, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
+		INSERT INTO comments (id, post_id, user_id, content, image, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, comment.ID, comment.PostID, comment.UserID, comment.Content, comment.Image, comment.CreatedAt, comment.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create comment: %w", err)
 	}
@@ -53,13 +54,13 @@ func (s *CommentService) Create(comment *Comment) error {
 func (s *CommentService) GetByID(id string) (*Comment, error) {
 	comment := &Comment{Author: &User{}}
 	err := s.DB.QueryRow(`
-		SELECT c.id, c.post_id, c.user_id, c.content, c.created_at, c.updated_at,
+		SELECT c.id, c.post_id, c.user_id, c.content, c.image, c.created_at, c.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture
 		FROM comments c
 		JOIN users u ON c.user_id = u.id
 		WHERE c.id = ?
 	`, id).Scan(
-		&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.CreatedAt, &comment.UpdatedAt,
+		&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.Image, &comment.CreatedAt, &comment.UpdatedAt,
 		&comment.Author.ID, &comment.Author.Username, &comment.Author.FullName, &comment.Author.ProfilePicture,
 	)
 	if err != nil {
@@ -78,9 +79,9 @@ func (s *CommentService) Update(comment *Comment) error {
 
 	_, err := s.DB.Exec(`
 		UPDATE comments
-		SET content = ?, updated_at = ?
+		SET content = ?, image = ?, updated_at = ?
 		WHERE id = ? AND user_id = ?
-	`, comment.Content, comment.UpdatedAt, comment.ID, comment.UserID)
+	`, comment.Content, comment.Image, comment.UpdatedAt, comment.ID, comment.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to update comment: %w", err)
 	}
@@ -129,7 +130,7 @@ func (s *CommentService) Delete(id, userID string) error {
 // GetCommentsByPost retrieves all comments for a post
 func (s *CommentService) GetCommentsByPost(postID string, limit, offset int) ([]*Comment, error) {
 	rows, err := s.DB.Query(`
-		SELECT c.id, c.post_id, c.user_id, c.content, c.created_at, c.updated_at,
+		SELECT c.id, c.post_id, c.user_id, c.content, c.image, c.created_at, c.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture
 		FROM comments c
 		JOIN users u ON c.user_id = u.id
@@ -146,7 +147,7 @@ func (s *CommentService) GetCommentsByPost(postID string, limit, offset int) ([]
 	for rows.Next() {
 		comment := &Comment{Author: &User{}}
 		err := rows.Scan(
-			&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.CreatedAt, &comment.UpdatedAt,
+			&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.Image, &comment.CreatedAt, &comment.UpdatedAt,
 			&comment.Author.ID, &comment.Author.Username, &comment.Author.FullName, &comment.Author.ProfilePicture,
 		)
 		if err != nil {

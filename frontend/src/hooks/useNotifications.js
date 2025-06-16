@@ -22,9 +22,9 @@ const useNotifications = () => {
       }
 
       const response = await notificationAPI.getNotifications();
-      console.log(">>>>res2", response)
+      console.log("Notifications response:", response.data);
       // Handle case where notifications might be null
-      const notificationsData = response.data.data.notifications || [];
+      const notificationsData = response.data.data?.notifications || [];
       setNotifications(notificationsData);
 
       // Calculate unread count

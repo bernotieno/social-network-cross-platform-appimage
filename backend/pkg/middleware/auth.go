@@ -51,7 +51,9 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// If cookie auth fails, try Bearer token authentication
 		authHeader := r.Header.Get("Authorization")
+		log.Printf("Auth middleware - Authorization header: %s", authHeader)
 		if authHeader == "" {
+			log.Printf("Auth middleware - No Authorization header found")
 			utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized: No authentication provided")
 			return
 		}
@@ -59,16 +61,20 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Check if the header has the correct format
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
+			log.Printf("Auth middleware - Invalid authorization format: %v", parts)
 			utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized: Invalid authorization format")
 			return
 		}
 
+		log.Printf("Auth middleware - Validating token: %s", parts[1])
 		// Validate token
 		userID, err := auth.ValidateSession(r.Context(), db, parts[1])
 		if err != nil {
+			log.Printf("Auth middleware - Token validation failed: %v", err)
 			utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized: "+err.Error())
 			return
 		}
+		log.Printf("Auth middleware - Token validation successful for user: %s", userID)
 
 		// Add user ID to request context
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)

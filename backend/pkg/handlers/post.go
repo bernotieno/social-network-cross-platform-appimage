@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/bernaotieno/social-network/backend/pkg/middleware"
 	"github.com/bernaotieno/social-network/backend/pkg/models"
@@ -14,8 +15,9 @@ import (
 
 // CreatePostRequest represents a request to create a post
 type CreatePostRequest struct {
-	Content    string                `json:"content"`
-	Visibility models.PostVisibility `json:"visibility"`
+	Content       string                `json:"content"`
+	Visibility    models.PostVisibility `json:"visibility"`
+	CustomViewers []string              `json:"customViewers,omitempty"`
 }
 
 // UpdatePostRequest represents a request to update a post
@@ -52,7 +54,8 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	// Validate visibility
 	if visibility != string(models.PostVisibilityPublic) &&
 		visibility != string(models.PostVisibilityFollowers) &&
-		visibility != string(models.PostVisibilityPrivate) {
+		visibility != string(models.PostVisibilityPrivate) &&
+		visibility != string(models.PostVisibilityCustom) {
 		visibility = string(models.PostVisibilityPublic)
 	}
 
@@ -82,6 +85,33 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if err := h.PostService.Create(post); err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create post")
 		return
+	}
+
+	// Handle custom viewers if visibility is custom
+	if post.Visibility == models.PostVisibilityCustom {
+		customViewersStr := r.FormValue("customViewers")
+		if customViewersStr != "" {
+			// Parse custom viewers from JSON string
+			var customViewers []string
+			if err := json.Unmarshal([]byte(customViewersStr), &customViewers); err != nil {
+				// If JSON parsing fails, try comma-separated values
+				customViewers = []string{}
+				for _, viewer := range strings.Split(customViewersStr, ",") {
+					viewer = strings.TrimSpace(viewer)
+					if viewer != "" {
+						customViewers = append(customViewers, viewer)
+					}
+				}
+			}
+
+			// Add viewers to the post
+			if len(customViewers) > 0 {
+				if err := h.PostViewerService.AddViewers(post.ID, customViewers); err != nil {
+					// Log error but don't fail the post creation
+					// TODO: Add proper logging
+				}
+			}
+		}
 	}
 
 	// Get user for response
@@ -174,7 +204,8 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	// Validate visibility
 	if visibility != string(models.PostVisibilityPublic) &&
 		visibility != string(models.PostVisibilityFollowers) &&
-		visibility != string(models.PostVisibilityPrivate) {
+		visibility != string(models.PostVisibilityPrivate) &&
+		visibility != string(models.PostVisibilityCustom) {
 		visibility = string(models.PostVisibilityPublic)
 	}
 

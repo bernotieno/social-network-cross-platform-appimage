@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { groupAPI } from '@/utils/api';
-import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
+import { getUserProfilePictureUrl, getFallbackAvatar, isGif, validateImageFile } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import Post from '@/components/Post';
+import FollowerSelector from '@/components/FollowerSelector';
+import SelectedFollowersTags from '@/components/SelectedFollowersTags';
 import styles from '@/styles/GroupPosts.module.css';
 
 export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
@@ -45,6 +47,13 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file using utility function
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        showError(validation.error, 'Invalid File');
+        return;
+      }
+
       setNewPost(prev => ({ ...prev, image: file }));
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -192,13 +201,28 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
 
               {imagePreview && (
                 <div className={styles.imagePreview}>
-                  <Image
-                    src={imagePreview}
-                    alt="Preview"
-                    width={200}
-                    height={200}
-                    style={{ objectFit: 'cover' }}
-                  />
+                  {newPost.image && isGif(newPost.image.name) ? (
+                    // Use regular img tag for GIFs to preserve animation
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      style={{
+                        width: '200px',
+                        height: '200px',
+                        objectFit: 'cover',
+                        borderRadius: '8px'
+                      }}
+                    />
+                  ) : (
+                    // Use Next.js Image for static images
+                    <Image
+                      src={imagePreview}
+                      alt="Preview"
+                      width={200}
+                      height={200}
+                      style={{ objectFit: 'cover' }}
+                    />
+                  )}
                   <button
                     type="button"
                     className={styles.removeImage}
@@ -216,13 +240,13 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
                 <div className={styles.attachments}>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/gif"
                     onChange={handleImageChange}
                     className={styles.fileInput}
                     id="postImage"
                   />
                   <label htmlFor="postImage" className={styles.attachButton}>
-                    📷 Photo
+                    📷 Photo/GIF
                   </label>
                 </div>
 

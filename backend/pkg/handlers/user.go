@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -485,43 +486,40 @@ func (h *Handler) FollowUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create follow relationship
-	follow, err := h.FollowService.Create(followerID, followingID, followingUser.IsPrivate)
-	if err != nil {
-		if err.Error() == "follow relationship already exists" {
-			utils.RespondWithError(w, http.StatusConflict, "Already following or request pending")
-		} else {
-			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to follow user")
-		}
+	// Check if already following before creating new follow relationship
+	isFollowing, err := h.FollowService.IsFollowing(followerID, followingID)
+	if err == nil && isFollowing {
+		utils.RespondWithError(w, http.StatusConflict, "Already following this user")
 		return
 	}
 
-	// Create notification for the target user
-	var notificationType models.NotificationType
-	var notificationContent string
-	var notificationData string
-
-	if followingUser.IsPrivate {
-		notificationType = models.NotificationTypeFollowRequest
-		notificationContent = "requested to follow you"
-		// Store the follow request ID in the notification data
-		notificationData = `{"followRequestId":"` + follow.ID + `"}`
-	} else {
-		notificationType = models.NotificationTypeNewFollower
-		notificationContent = "started following you"
+	// Check if there's a pending request
+	hasPending, err := h.FollowService.HasPendingRequest(followerID, followingID)
+	if err == nil && hasPending {
+		utils.RespondWithError(w, http.StatusConflict, "Follow request already pending")
+		return
 	}
 
-	notification := &models.Notification{
-		UserID:   followingID,
-		SenderID: followerID,
-		Type:     notificationType,
-		Content:  notificationContent,
-		Data:     notificationData,
+	// Create follow relationship
+	follow, err := h.FollowService.Create(followerID, followingID, followingUser.IsPrivate)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to follow user")
+		return
 	}
 
-	if err := h.NotificationService.Create(notification); err != nil {
-		// Log error but don't fail the request
-		// TODO: Add proper logging
+	// Only send notification for new follow requests/follows
+	if followingUser.IsPrivate && !isFollowing && !hasPending {
+		// Create notification for private account follow request
+		notification := &models.Notification{
+			UserID:   followingID,
+			SenderID: followerID,
+			Type:     models.NotificationTypeFollowRequest,
+			Content:  "requested to follow you",
+			Data:     `{"followRequestId":"` + follow.ID + `"}`,
+		}
+		if err := h.NotificationService.Create(notification); err != nil {
+			log.Printf("Error creating follow request notification: %v", err)
+		}
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "Follow request sent", map[string]interface{}{
@@ -585,6 +583,29 @@ func (h *Handler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
 		return
+	}
+
+	// Check if the target user has a private profile
+	targetUser, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Check if current user is authorized to view followers
+	isOwnProfile := currentUserID == userID
+	if targetUser.IsPrivate && !isOwnProfile {
+		// For private profiles, check if current user is a follower
+		isFollowing, err := h.FollowService.IsFollowing(currentUserID, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check follow status")
+			return
+		}
+
+		if !isFollowing {
+			utils.RespondWithError(w, http.StatusForbidden, "Not authorized to view followers of this private account")
+			return
+		}
 	}
 
 	// Get followers
@@ -663,6 +684,29 @@ func (h *Handler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
 		return
+	}
+
+	// Check if the target user has a private profile
+	targetUser, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Check if current user is authorized to view following list
+	isOwnProfile := currentUserID == userID
+	if targetUser.IsPrivate && !isOwnProfile {
+		// For private profiles, check if current user is a follower
+		isFollowing, err := h.FollowService.IsFollowing(currentUserID, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check follow status")
+			return
+		}
+
+		if !isFollowing {
+			utils.RespondWithError(w, http.StatusForbidden, "Not authorized to view following list of this private account")
+			return
+		}
 	}
 
 	// Get following
