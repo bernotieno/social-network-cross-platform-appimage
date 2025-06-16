@@ -1518,7 +1518,7 @@ func (h *Handler) GetGroupPostComments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get comments
-	comments, err := h.CommentService.GetCommentsByPost(postID, 50, 0)
+	comments, err := h.CommentService.GetCommentsByPost(postID, currentUserID, 50, 0)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get comments")
 		return
