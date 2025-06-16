@@ -142,21 +142,33 @@ export const getFollowButtonState = (profile, currentUser) => {
     return { text: 'Edit Profile', variant: 'outline', action: 'edit', disabled: false };
   }
 
-  // Check if already following
-  if (profile.isFollowedByCurrentUser) {
+  // Check if already following - this should be checked first regardless of privacy setting
+  const isFollowing = profile.isFollowedByCurrentUser || 
+                     user.isFollowedByCurrentUser || 
+                     profile.isFollowing || 
+                     user.isFollowing ||
+                     false;
+
+  // If already following, show unfollow button regardless of privacy setting
+  if (isFollowing) {
     return { text: 'Unfollow', variant: 'secondary', action: 'unfollow', disabled: false };
   }
 
-  // Check if there's a pending request
-  if (profile.hasPendingFollowRequest || profile.followStatus === 'pending') {
+  // Check pending request only if not already following
+  const hasPendingRequest = profile.hasPendingFollowRequest || 
+                           user.hasPendingFollowRequest ||
+                           profile.followStatus === 'pending' ||
+                           user.followStatus === 'pending' ||
+                           false;
+
+  if (hasPendingRequest) {
     return { text: 'Pending Request', variant: 'secondary', action: 'cancel_request', disabled: false };
   }
 
-  // For private profiles, show "Request to Follow"
+  // Show appropriate button for non-following state
   if (user.isPrivate) {
     return { text: 'Request to Follow', variant: 'primary', action: 'request_follow', disabled: false };
   }
 
-  // Default follow button for public profiles
   return { text: 'Follow', variant: 'primary', action: 'follow', disabled: false };
 };
