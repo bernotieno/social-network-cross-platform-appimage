@@ -7,6 +7,7 @@ backend/social_network.db
 *.db
 *.sqlite
 *.sqlite3
+.trae
 
 # Upload directories
 backend/uploads/
