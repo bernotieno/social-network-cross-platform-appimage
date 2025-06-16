@@ -33,12 +33,12 @@ func SetupLogFile() (*os.File, error) {
 func Logger(message string, err error) {
 
 	if strings.Contains(message, "ERROR") {
-		logger := log.New(logFile, message, log.Ldate|log.Ltime|log.Lshortfile)
+		logger := log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 		logger.Println(message)
-		terminalLogger := log.New(os.Stderr, fmt.Sprintf("%s: %v", message, err), log.Ldate|log.Ltime|log.Lshortfile)
+		terminalLogger := log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
 		terminalLogger.Println(fmt.Sprintf("%s: %v", message, err))
 	} else {
-		logger := log.New(logFile, message, log.Ldate|log.Ltime|log.Lshortfile)
+		logger := log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 		logger.Println(message)
 	}
 }

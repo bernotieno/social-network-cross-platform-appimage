@@ -19,23 +19,14 @@ import (
 	"github.com/gorilla/mux"
 )
 
-
 func main() {
 	// Parse command line flags
 	var (
-		
 		port           = flag.String("port", "8080", "Server port")
 		dbPath         = flag.String("db", "./social_network.db", "SQLite database path")
 		migrationsPath = flag.String("migrations", "./pkg/db/migrations/sqlite", "Path to migrations directory")
 	)
 	flag.Parse()
-
-	// Initialize database
-	db, err := sqlite.NewDB(*dbPath)
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
 
 	// Initialize logger
 	if logFile, err := utils.SetupLogFile(); err != nil {
@@ -43,6 +34,15 @@ func main() {
 	} else {
 		defer logFile.Close()
 	}
+	// Initialize database
+	db, err := sqlite.NewDB(*dbPath)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}else{
+		utils.Logger("[INFO]: database created successfully",nil)
+	}
+	defer db.Close()
+
 
 	// Run migrations
 	if err := sqlite.RunMigrations(*dbPath, *migrationsPath); err != nil {
