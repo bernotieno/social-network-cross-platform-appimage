@@ -158,12 +158,10 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 				(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 			FROM groups g
 			JOIN users u ON g.creator_id = u.id
-			WHERE (g.name LIKE ? OR g.description LIKE ?) AND (g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
-				SELECT 1 FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted'
-			))
+			WHERE (g.name LIKE ? OR g.description LIKE ?)
 			ORDER BY g.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", currentUserID, currentUserID, limit, offset)
+		`, currentUserID, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", limit, offset)
 	} else {
 		rows, err = s.DB.Query(`
 			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
@@ -173,12 +171,9 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 				(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 			FROM groups g
 			JOIN users u ON g.creator_id = u.id
-			WHERE g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
-				SELECT 1 FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted'
-			)
 			ORDER BY g.created_at DESC
 			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, limit, offset)
+		`, currentUserID, currentUserID, currentUserID, limit, offset)
 	}
 
 	if err != nil {
