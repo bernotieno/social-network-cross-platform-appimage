@@ -7,6 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	// Import the models package to access GroupPrivacy and PostVisibility
+//  "social-network/backend/pkg/models"
+// "backend/pkg/models"
 )
 
 // Comment represents a comment on a post
@@ -128,7 +132,62 @@ func (s *CommentService) Delete(id, userID string) error {
 }
 
 // GetCommentsByPost retrieves all comments for a post
-func (s *CommentService) GetCommentsByPost(postID string, limit, offset int) ([]*Comment, error) {
+func (s *CommentService) GetCommentsByPost(postID string, currentUserID string, limit, offset int) ([]*Comment, error) {
+	// Check if the post is a group post
+	var groupID sql.NullString
+	var postUserID string
+	err := s.DB.QueryRow(
+		"SELECT group_id, user_id FROM posts WHERE id = ?",
+		postID,
+	).Scan(&groupID, &postUserID)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to check post type: %w", err)
+	}
+
+	if groupID.Valid {
+		// It's a group post, check group privacy
+		var groupPrivacy GroupPrivacy
+		err = s.DB.QueryRow("SELECT privacy FROM groups WHERE id = ?", groupID.String).Scan(&groupPrivacy)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, errors.New("group not found for post")
+			}
+			return nil, fmt.Errorf("failed to get group privacy for post: %w", err)
+		}
+
+		if groupPrivacy == GroupPrivacyPrivate {
+			// Check if the current user is a member of the group
+			var isMember bool
+			err = s.DB.QueryRow(`
+				SELECT COUNT(*) > 0
+				FROM group_members
+				WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+			`, groupID.String, currentUserID).Scan(&isMember)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check group membership for post comments: %w", err)
+			}
+
+			if !isMember {
+				return nil, errors.New("not authorized to view comments on this group post")
+			}
+		}
+	} else {
+		// It's a regular post, check post visibility
+		var postVisibility PostVisibility
+		err = s.DB.QueryRow("SELECT visibility FROM posts WHERE id = ?", postID).Scan(&postVisibility)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, errors.New("post not found for comments")
+			}
+			return nil, fmt.Errorf("failed to get post visibility for comments: %w", err)
+		}
+
+		if postVisibility == PostVisibilityPrivate && postUserID != currentUserID {
+			return nil, errors.New("not authorized to view comments on this private post")
+		}
+		// Add more visibility checks if needed (e.g., followers only)
+	}
+
 	rows, err := s.DB.Query(`
 		SELECT c.id, c.post_id, c.user_id, c.content, c.image, c.created_at, c.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture
