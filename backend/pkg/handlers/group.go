@@ -80,7 +80,13 @@ func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get groups
-	groups, err := h.GroupService.GetGroups(query, userID, limit, offset)
+	var groups []*models.Group
+	if query != "" {
+		groups, err = h.GroupService.SearchGroups(query, userID, limit, offset)
+	} else {
+		groups, err = h.GroupService.GetGroups(userID, limit, offset)
+	}
+
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get groups")
 		return
