@@ -145,3 +145,4 @@ secrets.json
 
 # Qodo's file configurations
 *.qodo
+.qodo
