@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,29 +17,27 @@ export default function Groups() {
   const [groups, setGroups] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('my-groups');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchGroups();
-  }, [activeTab]);
-
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async (query = '') => {
     try {
       setIsLoading(true);
 
-      const response = await groupAPI.getGroups();
+      const response = await groupAPI.getGroups(query);
 
       if (response.data.success) {
-        // Filter groups based on active tab
-        let filteredGroups = [];
-        const allGroups = response.data.data?.groups || response.data.groups || [];
+        let fetchedGroups = response.data.data?.groups || response.data.groups || [];
 
-        if (activeTab === 'my-groups') {
-          filteredGroups = allGroups.filter(group => group.isJoined);
-        } else if (activeTab === 'discover') {
-          filteredGroups = allGroups.filter(group => !group.isJoined);
+        // Apply tab filtering only if there's no search query
+        if (!query) {
+          if (activeTab === 'my-groups') {
+            fetchedGroups = fetchedGroups.filter(group => group.isJoined);
+          } else if (activeTab === 'discover') {
+            fetchedGroups = fetchedGroups.filter(group => !group.isJoined);
+          }
         }
 
-        setGroups(filteredGroups);
+        setGroups(fetchedGroups);
       } else {
         setGroups([]);
       }
@@ -49,6 +47,14 @@ export default function Groups() {
     } finally {
       setIsLoading(false);
     }
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchGroups(searchQuery);
+  }, [activeTab, searchQuery, fetchGroups]);
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
   };
 
   const handleJoinGroup = async (groupId) => {
@@ -110,26 +116,38 @@ export default function Groups() {
           </Link>
         </div>
 
-        <div className={styles.groupsTabs}>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'my-groups' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('my-groups')}
-          >
-            My Groups
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'discover' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('discover')}
-          >
-            Discover
-          </button>
+        <div className={styles.groupsSearchAndTabs}>
+          <input
+            type="text"
+            placeholder="Search groups..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className={styles.searchInput}
+          />
+
+          <div className={styles.groupsTabs}>
+            <button
+              className={`${styles.tabButton} ${activeTab === 'my-groups' ? styles.activeTab : ''}`}
+              onClick={() => setActiveTab('my-groups')}
+            >
+              My Groups
+            </button>
+            <button
+              className={`${styles.tabButton} ${activeTab === 'discover' ? styles.activeTab : ''}`}
+              onClick={() => setActiveTab('discover')}
+            >
+              Discover
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
           <div className={styles.loading}>Loading groups...</div>
         ) : groups.length === 0 ? (
           <div className={styles.emptyGroups}>
-            {activeTab === 'my-groups' ? (
+            {searchQuery ? (
+              <p>No groups found matching "{searchQuery}"</p>
+            ) : activeTab === 'my-groups' ? (
               <>
                 <p>You haven&apos;t joined any groups yet</p>
                 <Link href="/groups?tab=discover">
