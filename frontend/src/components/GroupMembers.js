@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
+
 import { groupAPI, userAPI } from '@/utils/api';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
@@ -12,7 +13,7 @@ import styles from '@/styles/GroupMembers.module.css';
 
 export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onMembershipChange }) {
   const { user } = useAuth();
-  const { showError, showSuccess } = useAlert();
+  const { showConfirm,showAlert,showError, showSuccess } = useAlert();
   const [members, setMembers] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,9 +26,7 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
   useEffect(() => {
     if (isGroupMember) {
       fetchMembers();
-      if (isGroupAdmin) {
         fetchPendingRequests();
-      }
     }
   }, [groupId, isGroupMember, isGroupAdmin]);
 
@@ -146,6 +145,61 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
     }
   };
 
+  const handlePromoteMember = async (userId, userName) => {
+    // if (!window.confirm(`Are you sure you want to promote ${userName} to admin?`)) {
+    //   return;
+    // }
+    const confirmed = await showConfirm({
+      title: 'Promote Member',
+      message: `Are you sure you want to promote ${userName} to admin?`,
+      confirmText: 'Promote',
+      cancelText: 'Cancel',
+      confirmVariant: 'primary'  // Using primary color for non-destructive action
+    });
+  
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await groupAPI.promoteGroupMember(groupId, userId);
+      setMembers(prev => prev.map(member =>
+        (member.userId || member.user?.id || member.id) === userId
+          ? { ...member, role: 'admin' }
+          : member
+      ));
+    } catch (error) {
+      console.error('Error promoting member:', error);
+      showError(error.response?.data?.message || 'Failed to promote member. Please try again.');
+    }
+  };
+
+  const handleDemoteMember = async (userId, userName) => {
+    const confirmed = await showConfirm({
+      title: 'Promote Member',
+      message: `Are you sure you want to demote ${userName} from admin?`,
+      confirmText: 'Demote',
+      cancelText: 'Cancel',
+      confirmVariant: 'primary'  // Using primary color for non-destructive action
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await groupAPI.demoteGroupMember(groupId, userId);
+      setMembers(prev => prev.map(member =>
+        (member.userId || member.user?.id || member.id) === userId
+          ? { ...member, role: 'member' }
+          : member
+      ));
+      showSuccess(`${userName} demoted from admin successfully!`);
+    } catch (error) {
+      console.error('Error demoting member:', error);
+      showError(error.response?.data?.message || 'Failed to demote member. Please try again.');
+    }
+  };
+
   const handleRemoveMember = async (userId, userName) => {
     if (!window.confirm(`Are you sure you want to remove ${userName} from this group? This action cannot be undone.`)) {
       return;
@@ -202,18 +256,16 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
         >
           Members ({members.length})
         </button>
-        {isGroupAdmin && (
-          <button
-            className={`${styles.tabButton} ${activeTab === 'requests' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('requests')}
-          >
-            Requests ({pendingRequests.length})
-          </button>
-        )}
+        <button
+          className={`${styles.tabButton} ${activeTab === 'requests' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('requests')}
+        >
+          Requests ({pendingRequests.length})
+        </button>
       </div>
 
       {/* Invite Button */}
-      {isGroupAdmin && activeTab === 'members' && (
+      {activeTab === 'members' && (
         <div className={styles.inviteSection}>
           <Button
             variant="primary"
@@ -274,13 +326,32 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                       <span className={styles.adminBadge}>Admin</span>
                     )}
                     {isGroupAdmin && memberUser.id !== user?.id && (
-                      <Button
-                        variant="danger"
-                        size="small"
-                        onClick={() => handleRemoveMember(memberUser.id, memberUser.fullName)}
-                      >
-                        Remove
-                      </Button>
+                      <div className={styles.memberActions}>
+                        {member.role === 'member' ? (
+                          <Button
+                            variant="primary"
+                            size="small"
+                            onClick={() => handlePromoteMember(memberUser.id, memberUser.fullName)}
+                          >
+                            Promote to Admin
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="small"
+                            onClick={() => handleDemoteMember(memberUser.id, memberUser.fullName)}
+                          >
+                            Demote from Admin
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          size="small"
+                          onClick={() => handleRemoveMember(memberUser.id, memberUser.fullName)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -291,7 +362,7 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
       )}
 
       {/* Pending Requests */}
-      {activeTab === 'requests' && isGroupAdmin && (
+      {activeTab === 'requests' && (
         <div className={styles.requestsList}>
           {pendingRequests.length === 0 ? (
             <div className={styles.emptyState}>

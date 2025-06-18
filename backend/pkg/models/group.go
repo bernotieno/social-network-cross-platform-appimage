@@ -145,41 +145,18 @@ func (s *GroupService) Delete(id, userID string) error {
 }
 
 // GetGroups retrieves groups with optional filtering
-func (s *GroupService) GetGroups(query string, currentUserID string, limit, offset int) ([]*Group, error) {
-	var rows *sql.Rows
-	var err error
-
-	if query != "" {
-		rows, err = s.DB.Query(`
-			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
-				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
-				(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
-			FROM groups g
-			JOIN users u ON g.creator_id = u.id
-			WHERE (g.name LIKE ? OR g.description LIKE ?) AND (g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
-				SELECT 1 FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted'
-			))
-			ORDER BY g.created_at DESC
-			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", currentUserID, currentUserID, limit, offset)
-	} else {
-		rows, err = s.DB.Query(`
-			SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
-				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-				(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
-				(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
-			FROM groups g
-			JOIN users u ON g.creator_id = u.id
-			WHERE g.privacy = 'public' OR g.creator_id = ? OR EXISTS (
-				SELECT 1 FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted'
-			)
-			ORDER BY g.created_at DESC
-			LIMIT ? OFFSET ?
-		`, currentUserID, currentUserID, currentUserID, currentUserID, currentUserID, limit, offset)
-	}
+func (s *GroupService) GetGroups(currentUserID string, limit, offset int) ([]*Group, error) {
+	rows, err := s.DB.Query(`
+		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture,
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
+			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
+		FROM groups g
+		JOIN users u ON g.creator_id = u.id
+		ORDER BY g.created_at DESC
+		LIMIT ? OFFSET ?
+	`, currentUserID, currentUserID, currentUserID, limit, offset)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get groups: %w", err)
@@ -209,8 +186,58 @@ func (s *GroupService) GetGroups(query string, currentUserID string, limit, offs
 		groups = append(groups, group)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating groups: %w", err)
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error after iterating rows: %w", err)
+	}
+
+	return groups, nil
+}
+
+// SearchGroups searches groups by name or description
+func (s *GroupService) SearchGroups(query string, currentUserID string, limit, offset int) ([]*Group, error) {
+	rows, err := s.DB.Query(`
+		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture,
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
+			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
+		FROM groups g
+		JOIN users u ON g.creator_id = u.id
+		WHERE (g.name LIKE ? OR g.description LIKE ?)
+		ORDER BY g.created_at DESC
+		LIMIT ? OFFSET ?
+	`, currentUserID, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", limit, offset)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to search groups: %w", err)
+	}
+	defer rows.Close()
+
+	var groups []*Group
+	for rows.Next() {
+		group := &Group{Creator: &User{}}
+		var requestStatus sql.NullString
+		err := rows.Scan(
+			&group.ID, &group.Name, &group.Description, &group.CreatorID, &group.CoverPhoto, &group.Privacy, &group.CreatedAt, &group.UpdatedAt,
+			&group.Creator.ID, &group.Creator.Username, &group.Creator.FullName, &group.Creator.ProfilePicture,
+			&group.MembersCount, &group.IsJoined, &requestStatus,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan group: %w", err)
+		}
+
+		// Set request status
+		if requestStatus.Valid {
+			group.RequestStatus = requestStatus.String
+		} else {
+			group.RequestStatus = "none"
+		}
+
+		groups = append(groups, group)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error after iterating rows: %w", err)
 	}
 
 	return groups, nil

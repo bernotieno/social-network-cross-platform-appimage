@@ -61,7 +61,7 @@ func (h *Handler) GetComments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get comments
-	comments, err := h.CommentService.GetCommentsByPost(postID, limit, offset)
+	comments, err := h.CommentService.GetCommentsByPost(postID, currentUserID, limit, offset)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get comments")
 		return

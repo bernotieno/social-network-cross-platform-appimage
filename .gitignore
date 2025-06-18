@@ -7,6 +7,7 @@ backend/social_network.db
 *.db
 *.sqlite
 *.sqlite3
+.trae
 
 # Upload directories
 backend/uploads/
@@ -144,3 +145,4 @@ secrets.json
 
 # Qodo's file configurations
 *.qodo
+.qodo

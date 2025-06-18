@@ -152,7 +152,10 @@ export const postAPI = {
 
 // Group API calls
 export const groupAPI = {
-  getGroups: () => api.get('/groups'),
+  getGroups: (query = '') => {
+    const params = query ? `?q=${encodeURIComponent(query)}` : '';
+    return api.get(`/groups${params}`);
+  },
   getGroup: (groupId) => api.get(`/groups/${groupId}`),
   createGroup: (groupData) => {
     // For FormData, don't set Content-Type header - let browser set it with boundary
@@ -175,6 +178,9 @@ export const groupAPI = {
   leaveGroup: (groupId) => api.delete(`/groups/${groupId}/join`),
   getGroupMembers: (groupId) => api.get(`/groups/${groupId}/members`),
   removeGroupMember: (groupId, userId) => api.delete(`/groups/${groupId}/members/${userId}`),
+  promoteGroupMember: (groupId, userId) => api.put(`/groups/${groupId}/members/${userId}/promote`),
+  demoteGroupMember: (groupId, userId) => api.put(`/groups/${groupId}/members/${userId}/demote`),
+  // Existing API methods for group join requests
   getGroupPendingRequests: (groupId) => api.get(`/groups/${groupId}/pending-requests`),
   approveJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/approve-request`, { userId }),
   rejectJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/reject-request`, { userId }),

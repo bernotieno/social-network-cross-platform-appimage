@@ -14,6 +14,7 @@ import (
 	"github.com/bernaotieno/social-network/backend/pkg/db/sqlite"
 	"github.com/bernaotieno/social-network/backend/pkg/handlers"
 	"github.com/bernaotieno/social-network/backend/pkg/middleware"
+	"github.com/bernaotieno/social-network/backend/pkg/utils"
 	"github.com/bernaotieno/social-network/backend/pkg/websocket"
 	"github.com/gorilla/mux"
 )
@@ -27,12 +28,21 @@ func main() {
 	)
 	flag.Parse()
 
+	// Initialize logger
+	if logFile, err := utils.SetupLogFile(); err != nil {
+		log.Fatalf("Failed to setup logger: %v", err)
+	} else {
+		defer logFile.Close()
+	}
 	// Initialize database
 	db, err := sqlite.NewDB(*dbPath)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
+	}else{
+		utils.Logger("[INFO]: database created successfully",nil)
 	}
 	defer db.Close()
+
 
 	// Run migrations
 	if err := sqlite.RunMigrations(*dbPath, *migrationsPath); err != nil {
@@ -167,7 +177,9 @@ func registerRoutes(api *mux.Router, h *handlers.Handler) {
 	groups.HandleFunc("/{id}/join", middleware.AuthMiddleware(h.JoinGroup)).Methods("POST")
 	groups.HandleFunc("/{id}/join", middleware.AuthMiddleware(h.LeaveGroup)).Methods("DELETE")
 	groups.HandleFunc("/{id}/members", middleware.AuthMiddleware(h.GetGroupMembers)).Methods("GET")
-	groups.HandleFunc("/{id}/members/{userId}", middleware.AuthMiddleware(h.RemoveGroupMember)).Methods("DELETE")
+	groups.HandleFunc("/{id}/members/{memberId}/promote", middleware.AuthMiddleware(h.PromoteGroupMember)).Methods("PUT")
+	groups.HandleFunc("/{id}/members/{memberId}/demote", middleware.AuthMiddleware(h.DemoteGroupMember)).Methods("PUT")
+	groups.HandleFunc("/{id}/members/{memberId}", middleware.AuthMiddleware(h.RemoveGroupMember)).Methods("DELETE")
 	groups.HandleFunc("/{id}/pending-requests", middleware.AuthMiddleware(h.GetGroupPendingRequests)).Methods("GET")
 	groups.HandleFunc("/{id}/approve-request", middleware.AuthMiddleware(h.ApproveJoinRequest)).Methods("POST")
 	groups.HandleFunc("/{id}/reject-request", middleware.AuthMiddleware(h.RejectJoinRequest)).Methods("POST")
