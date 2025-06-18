@@ -152,7 +152,10 @@ export const postAPI = {
 
 // Group API calls
 export const groupAPI = {
-  getGroups: () => api.get('/groups'),
+  getGroups: (query = '') => {
+    const params = query ? `?q=${encodeURIComponent(query)}` : '';
+    return api.get(`/groups${params}`);
+  },
   getGroup: (groupId) => api.get(`/groups/${groupId}`),
   createGroup: (groupData) => {
     // For FormData, don't set Content-Type header - let browser set it with boundary
