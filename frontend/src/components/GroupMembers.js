@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
+
 import { groupAPI, userAPI } from '@/utils/api';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
@@ -12,7 +13,7 @@ import styles from '@/styles/GroupMembers.module.css';
 
 export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onMembershipChange }) {
   const { user } = useAuth();
-  const { showError, showSuccess } = useAlert();
+  const { showConfirm,showAlert,showError, showSuccess } = useAlert();
   const [members, setMembers] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -145,7 +146,18 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
   };
 
   const handlePromoteMember = async (userId, userName) => {
-    if (!window.confirm(`Are you sure you want to promote ${userName} to admin?`)) {
+    // if (!window.confirm(`Are you sure you want to promote ${userName} to admin?`)) {
+    //   return;
+    // }
+    const confirmed = await showConfirm({
+      title: 'Promote Member',
+      message: `Are you sure you want to promote ${userName} to admin?`,
+      confirmText: 'Promote',
+      cancelText: 'Cancel',
+      confirmVariant: 'primary'  // Using primary color for non-destructive action
+    });
+  
+    if (!confirmed) {
       return;
     }
 
@@ -156,7 +168,6 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
           ? { ...member, role: 'admin' }
           : member
       ));
-      showSuccess(`${userName} promoted to admin successfully!`);
     } catch (error) {
       console.error('Error promoting member:', error);
       showError(error.response?.data?.message || 'Failed to promote member. Please try again.');
@@ -164,7 +175,14 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
   };
 
   const handleDemoteMember = async (userId, userName) => {
-    if (!window.confirm(`Are you sure you want to demote ${userName} from admin?`)) {
+    const confirmed = await showConfirm({
+      title: 'Promote Member',
+      message: `Are you sure you want to demote ${userName} from admin?`,
+      confirmText: 'Demote',
+      cancelText: 'Cancel',
+      confirmVariant: 'primary'  // Using primary color for non-destructive action
+    });
+    if (!confirmed) {
       return;
     }
 

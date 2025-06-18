@@ -80,7 +80,7 @@ export default function Groups() {
       message: 'Are you sure you want to leave this group?',
       confirmText: 'Leave',
       cancelText: 'Cancel',
-      confirmVariant: 'danger'
+      confirmVariant: 'primary'
     });
 
     if (confirmed) {
