@@ -291,6 +291,77 @@ func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PromoteGroupMember handles promoting a group member to admin
+func (h *Handler) PromoteGroupMember(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context (the caller)
+	callerID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and member ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+	memberID := vars["memberId"]
+
+	// Promote member to admin
+	if err := h.GroupMemberService.PromoteToAdmin(groupID, memberID, callerID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Group member promoted to admin successfully", nil)
+}
+
+// DemoteGroupMember handles demoting a group admin to a regular member
+func (h *Handler) DemoteGroupMember(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context (the caller)
+	callerID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and member ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+	memberID := vars["memberId"]
+
+	// Demote admin to member
+	if err := h.GroupMemberService.DemoteFromAdmin(groupID, memberID, callerID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Group member demoted successfully", nil)
+}
+
+// RemoveGroupMember handles removing a member from a group
+func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context (the caller)
+	callerID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get group ID and member ID from URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
+	memberID := vars["memberId"]
+
+	// Remove member
+	if err := h.GroupMemberService.RemoveMember(groupID, memberID, callerID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Group member removed successfully", nil)
+}
+
+
+
 // DeleteGroup handles deleting a group
 func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
@@ -1942,63 +2013,4 @@ func (h *Handler) DeleteGroupPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "Post deleted successfully", nil)
-}
-
-// RemoveGroupMember handles removing a member from a group
-func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (the admin performing the action)
-	adminUserID, err := middleware.GetUserID(r)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	// Get group ID and user ID from URL
-	vars := mux.Vars(r)
-	groupID := vars["id"]
-	userToRemoveID := vars["userId"]
-
-	// Check if the admin is actually a group admin
-	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, adminUserID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
-		return
-	}
-
-	if !isAdmin {
-		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can remove members")
-		return
-	}
-
-	// Check if the user to remove is a group member
-	isMember, err := h.GroupMemberService.IsGroupMember(groupID, userToRemoveID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check membership status")
-		return
-	}
-
-	if !isMember {
-		utils.RespondWithError(w, http.StatusBadRequest, "User is not a member of this group")
-		return
-	}
-
-	// Prevent removing the group creator
-	group, err := h.GroupService.GetByID(groupID, adminUserID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get group details")
-		return
-	}
-
-	if group.CreatorID == userToRemoveID {
-		utils.RespondWithError(w, http.StatusForbidden, "Cannot remove the group creator")
-		return
-	}
-
-	// Remove the member
-	if err := h.GroupMemberService.Delete(groupID, userToRemoveID); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to remove member")
-		return
-	}
-
-	utils.RespondWithSuccess(w, http.StatusOK, "Member removed successfully", nil)
 }
