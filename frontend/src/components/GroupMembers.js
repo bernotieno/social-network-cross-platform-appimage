@@ -144,6 +144,44 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
     }
   };
 
+  const handlePromoteMember = async (userId, userName) => {
+    if (!window.confirm(`Are you sure you want to promote ${userName} to admin?`)) {
+      return;
+    }
+
+    try {
+      await groupAPI.promoteGroupMember(groupId, userId);
+      setMembers(prev => prev.map(member =>
+        (member.userId || member.user?.id || member.id) === userId
+          ? { ...member, role: 'admin' }
+          : member
+      ));
+      showSuccess(`${userName} promoted to admin successfully!`);
+    } catch (error) {
+      console.error('Error promoting member:', error);
+      showError(error.response?.data?.message || 'Failed to promote member. Please try again.');
+    }
+  };
+
+  const handleDemoteMember = async (userId, userName) => {
+    if (!window.confirm(`Are you sure you want to demote ${userName} from admin?`)) {
+      return;
+    }
+
+    try {
+      await groupAPI.demoteGroupMember(groupId, userId);
+      setMembers(prev => prev.map(member =>
+        (member.userId || member.user?.id || member.id) === userId
+          ? { ...member, role: 'member' }
+          : member
+      ));
+      showSuccess(`${userName} demoted from admin successfully!`);
+    } catch (error) {
+      console.error('Error demoting member:', error);
+      showError(error.response?.data?.message || 'Failed to demote member. Please try again.');
+    }
+  };
+
   const handleRemoveMember = async (userId, userName) => {
     if (!window.confirm(`Are you sure you want to remove ${userName} from this group? This action cannot be undone.`)) {
       return;
@@ -270,13 +308,32 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                       <span className={styles.adminBadge}>Admin</span>
                     )}
                     {isGroupAdmin && memberUser.id !== user?.id && (
-                      <Button
-                        variant="danger"
-                        size="small"
-                        onClick={() => handleRemoveMember(memberUser.id, memberUser.fullName)}
-                      >
-                        Remove
-                      </Button>
+                      <div className={styles.memberActions}>
+                        {member.role === 'member' ? (
+                          <Button
+                            variant="primary"
+                            size="small"
+                            onClick={() => handlePromoteMember(memberUser.id, memberUser.fullName)}
+                          >
+                            Promote to Admin
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="small"
+                            onClick={() => handleDemoteMember(memberUser.id, memberUser.fullName)}
+                          >
+                            Demote from Admin
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          size="small"
+                          onClick={() => handleRemoveMember(memberUser.id, memberUser.fullName)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
