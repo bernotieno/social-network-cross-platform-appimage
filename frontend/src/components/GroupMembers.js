@@ -25,9 +25,7 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
   useEffect(() => {
     if (isGroupMember) {
       fetchMembers();
-      if (isGroupAdmin) {
         fetchPendingRequests();
-      }
     }
   }, [groupId, isGroupMember, isGroupAdmin]);
 
@@ -202,18 +200,16 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
         >
           Members ({members.length})
         </button>
-        {isGroupAdmin && (
-          <button
-            className={`${styles.tabButton} ${activeTab === 'requests' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('requests')}
-          >
-            Requests ({pendingRequests.length})
-          </button>
-        )}
+        <button
+          className={`${styles.tabButton} ${activeTab === 'requests' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('requests')}
+        >
+          Requests ({pendingRequests.length})
+        </button>
       </div>
 
       {/* Invite Button */}
-      {isGroupAdmin && activeTab === 'members' && (
+      {activeTab === 'members' && (
         <div className={styles.inviteSection}>
           <Button
             variant="primary"
@@ -291,7 +287,7 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
       )}
 
       {/* Pending Requests */}
-      {activeTab === 'requests' && isGroupAdmin && (
+      {activeTab === 'requests' && (
         <div className={styles.requestsList}>
           {pendingRequests.length === 0 ? (
             <div className={styles.emptyState}>

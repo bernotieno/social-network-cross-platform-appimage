@@ -175,6 +175,7 @@ export const groupAPI = {
   leaveGroup: (groupId) => api.delete(`/groups/${groupId}/join`),
   getGroupMembers: (groupId) => api.get(`/groups/${groupId}/members`),
   removeGroupMember: (groupId, userId) => api.delete(`/groups/${groupId}/members/${userId}`),
+  // Existing API methods for group join requests
   getGroupPendingRequests: (groupId) => api.get(`/groups/${groupId}/pending-requests`),
   approveJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/approve-request`, { userId }),
   rejectJoinRequest: (groupId, userId) => api.post(`/groups/${groupId}/reject-request`, { userId }),

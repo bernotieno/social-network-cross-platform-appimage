@@ -1007,17 +1007,9 @@ func (h *Handler) ApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if current user is an admin of the group
-	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, currentUserID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
-		return
-	}
 
-	if !isAdmin {
-		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can approve join requests")
-		return
-	}
+
+	
 
 	// Get the pending member request
 	member, err := h.GroupMemberService.GetByGroupAndUser(groupID, req.UserID)
@@ -1155,17 +1147,8 @@ func (h *Handler) InviteToGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if current user is an admin of the group
-	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, currentUserID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
-		return
-	}
-
-	if !isAdmin {
-		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can invite users")
-		return
-	}
+	// Allow all group members to invite users (previously only admins could)
+	// No permission check needed here as per new requirement.
 
 	// Check if user is already a member
 	isMember, err := h.GroupMemberService.IsGroupMember(groupID, req.UserID)
