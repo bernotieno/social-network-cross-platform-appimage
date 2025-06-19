@@ -182,9 +182,9 @@ func (h *Handler) AddComment(w http.ResponseWriter, r *http.Request) {
 		"comment": comment,
 	}
 
-	message := &websocket.Message{
-		Type:    "new_comment",
-		Content: newCommentEvent,
+	message := map[string]interface{}{
+		"type":    "new_comment",
+		"payload": newCommentEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
@@ -238,9 +238,9 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 		"commentId": commentID,
 	}
 
-	message := &websocket.Message{
-		Type:    "comment_deleted",
-		Content: deleteCommentEvent,
+	message := map[string]interface{}{
+		"type":    "comment_deleted",
+		"payload": deleteCommentEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
