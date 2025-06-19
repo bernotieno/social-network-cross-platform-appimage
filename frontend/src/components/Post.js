@@ -7,13 +7,13 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { postAPI, groupAPI } from '@/utils/api';
 import { getImageUrl, isGif, validateImageFile } from '@/utils/images';
-import { subscribeToPostLikes, subscribeToNewComments, subscribeToCommentDeletions } from '@/utils/socket';
+import { subscribeToPostLikes, subscribeToNewComments, subscribeToCommentDeletions, subscribeToGroupPostLikes, subscribeToGroupPostComments, subscribeToGroupPostCommentDeletions } from '@/utils/socket';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import { ConfirmModal, AlertModal } from '@/components/Modal';
 import styles from '@/styles/Post.module.css';
 
-const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, isGroupAdmin = false }) => {
+const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, isGroupAdmin = false, priority = false }) => {
   const { user } = useAuth();
   const { showSuccess } = useAlert();
 
@@ -47,31 +47,44 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
 
   const handleLikeToggle = async () => {
     try {
+      console.log('Like toggle clicked:', { isLiked, postId: post.id, isGroupPost, groupId });
+
       if (isGroupPost && groupId) {
         // Use group post API
         if (isLiked) {
-          await groupAPI.unlikeGroupPost(groupId, post.id);
+          console.log('Unliking group post...');
+          const response = await groupAPI.unlikeGroupPost(groupId, post.id);
+          console.log('Unlike response:', response);
           setIsLiked(false);
           setLikesCount(prev => prev - 1);
         } else {
-          await groupAPI.likeGroupPost(groupId, post.id);
+          console.log('Liking group post...');
+          const response = await groupAPI.likeGroupPost(groupId, post.id);
+          console.log('Like response:', response);
           setIsLiked(true);
           setLikesCount(prev => prev + 1);
         }
       } else {
         // Use regular post API
         if (isLiked) {
-          await postAPI.unlikePost(post.id);
+          console.log('Unliking regular post...');
+          const response = await postAPI.unlikePost(post.id);
+          console.log('Unlike response:', response);
           setIsLiked(false);
           setLikesCount(prev => prev - 1);
         } else {
-          await postAPI.likePost(post.id);
+          console.log('Liking regular post...');
+          const response = await postAPI.likePost(post.id);
+          console.log('Like response:', response);
           setIsLiked(true);
           setLikesCount(prev => prev + 1);
         }
       }
     } catch (error) {
       console.error('Error toggling like:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Revert the optimistic update on error
+      // The state will remain as it was before the failed attempt
     }
   };
 
@@ -86,9 +99,14 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
         } else {
           response = await postAPI.getComments(post.id);
         }
-        console.log(">>>>", response)
-        setComments(response.data.data.comments || []);
-        console.log(response.data.data.comments)
+        console.log("Full response:", response)
+        console.log("Response data:", response.data)
+        console.log("Response data.data:", response.data?.data)
+
+        // The API response structure is: { success: true, message: "...", data: { comments: [...] } }
+        const comments = response.data?.data?.comments || [];
+        setComments(comments);
+        console.log("Comments:", comments)
       } catch (error) {
         console.error('Error fetching comments:', error);
         // Set empty array on error to show the "no comments" message
@@ -153,7 +171,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
         }
       }
 
-      setComments(prev => [response.data.data.comment, ...prev]);
+      setComments(prev => [response.data.data?.comment, ...prev]);
       setNewComment('');
       setCommentImage(null);
       setCommentImagePreview(null);
@@ -227,45 +245,86 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
 
   // Real-time WebSocket event listeners
   useEffect(() => {
-    // Subscribe to post likes/unlikes
-    const unsubscribeLikes = subscribeToPostLikes((data) => {
-      if (post?.id && data.postId === post.id) {
-        if (data.action === 'like') {
-          setLikesCount(prev => prev + 1);
-          // If the current user liked it, update the like state
-          if (data.userId === user?.id) {
-            setIsLiked(true);
-          }
-        } else if (data.action === 'unlike') {
-          setLikesCount(prev => Math.max(0, prev - 1));
-          // If the current user unliked it, update the like state
-          if (data.userId === user?.id) {
-            setIsLiked(false);
+    let unsubscribeLikes, unsubscribeComments, unsubscribeCommentDeletions;
+
+    if (isGroupPost) {
+      // Subscribe to group post events
+      unsubscribeLikes = subscribeToGroupPostLikes((data) => {
+        if (post?.id && data.postId === post.id && data.groupId === groupId) {
+          if (data.action === 'like') {
+            setLikesCount(prev => prev + 1);
+            // If the current user liked it, update the like state
+            if (data.userId === user?.id) {
+              setIsLiked(true);
+            }
+          } else if (data.action === 'unlike') {
+            setLikesCount(prev => Math.max(0, prev - 1));
+            // If the current user unliked it, update the like state
+            if (data.userId === user?.id) {
+              setIsLiked(false);
+            }
           }
         }
-      }
-    });
+      });
 
-    // Subscribe to new comments
-    const unsubscribeComments = subscribeToNewComments((data) => {
-      if (post?.id && data.postId === post.id && showComments) {
-        setComments(prev => [...prev, data.comment]);
-      }
-    });
+      unsubscribeComments = subscribeToGroupPostComments((data) => {
+        if (post?.id && data.postId === post.id && data.groupId === groupId && showComments) {
+          // Only add the comment if it's not from the current user (to avoid duplicates)
+          // The current user's comments are already added optimistically
+          if (data.comment?.author?.id !== user?.id) {
+            setComments(prev => [...prev, data.comment]);
+          }
+        }
+      });
 
-    // Subscribe to comment deletions
-    const unsubscribeCommentDeletions = subscribeToCommentDeletions((data) => {
-      if (post?.id && data.postId === post.id && showComments) {
-        setComments(prev => prev.filter(comment => comment.id !== data.commentId));
-      }
-    });
+      unsubscribeCommentDeletions = subscribeToGroupPostCommentDeletions((data) => {
+        if (post?.id && data.postId === post.id && data.groupId === groupId && showComments) {
+          setComments(prev => prev.filter(comment => comment.id !== data.commentId));
+        }
+      });
+    } else {
+      // Subscribe to regular post events
+      unsubscribeLikes = subscribeToPostLikes((data) => {
+        if (post?.id && data.postId === post.id) {
+          if (data.action === 'like') {
+            setLikesCount(prev => prev + 1);
+            // If the current user liked it, update the like state
+            if (data.userId === user?.id) {
+              setIsLiked(true);
+            }
+          } else if (data.action === 'unlike') {
+            setLikesCount(prev => Math.max(0, prev - 1));
+            // If the current user unliked it, update the like state
+            if (data.userId === user?.id) {
+              setIsLiked(false);
+            }
+          }
+        }
+      });
+
+      unsubscribeComments = subscribeToNewComments((data) => {
+        if (post?.id && data.postId === post.id && showComments) {
+          // Only add the comment if it's not from the current user (to avoid duplicates)
+          // The current user's comments are already added optimistically
+          if (data.comment?.author?.id !== user?.id) {
+            setComments(prev => [...prev, data.comment]);
+          }
+        }
+      });
+
+      unsubscribeCommentDeletions = subscribeToCommentDeletions((data) => {
+        if (post?.id && data.postId === post.id && showComments) {
+          setComments(prev => prev.filter(comment => comment.id !== data.commentId));
+        }
+      });
+    }
 
     return () => {
-      unsubscribeLikes();
-      unsubscribeComments();
-      unsubscribeCommentDeletions();
+      if (unsubscribeLikes) unsubscribeLikes();
+      if (unsubscribeComments) unsubscribeComments();
+      if (unsubscribeCommentDeletions) unsubscribeCommentDeletions();
     };
-  }, [post?.id, user?.id, showComments]);
+  }, [post?.id, user?.id, showComments, isGroupPost, groupId]);
 
   const handleDropdownToggle = () => {
     setShowDropdown(!showDropdown);
@@ -464,6 +523,8 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
                     src={getImageUrl(post.image)}
                     alt="Post image"
                     fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    priority={priority}
                     style={{ objectFit: 'cover' }}
                   />
                 )}
