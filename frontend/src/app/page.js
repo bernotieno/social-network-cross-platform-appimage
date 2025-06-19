@@ -43,14 +43,10 @@ export default function Home() {
   const fetchFeed = async () => {
     try {
       setIsLoading(true);
-      console.log('Fetching feed...');
       const response = await postAPI.getFeed();
-      console.log('Feed response:', response.data);
-      console.log('Posts from response:', response.data.data?.posts);
       setPosts(response.data.data?.posts || []);
     } catch (error) {
       console.error('Error fetching feed:', error);
-      console.error('Error details:', error.response?.data);
     } finally {
       setIsLoading(false);
     }
@@ -59,6 +55,8 @@ export default function Home() {
   const handleDeletePost = (postId) => {
     setPosts(prev => prev.filter(post => post.id !== postId));
   };
+
+
 
   // Guest home page
   if (!isAuthenticated) {
@@ -125,17 +123,20 @@ export default function Home() {
         <div className={styles.feedContent}>
           <div className={styles.feedHeader}>
             <h1 className={styles.feedTitle}>Your Feed</h1>
-            <Link href="/posts/create">
-              <Button variant="primary">Create Post</Button>
-            </Link>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <Link href="/posts/create">
+                <Button variant="primary">Create Post</Button>
+              </Link>
+            </div>
           </div>
 
           <div className={styles.postsContainer}>
-            {posts.map(post => (
+            {posts.map((post, index) => (
               <Post
                 key={post.id}
                 post={post}
                 onDelete={handleDeletePost}
+                priority={index < 2} // First 2 posts get priority loading
               />
             ))}
           </div>
