@@ -43,12 +43,24 @@ type Notification struct {
 
 // NotificationService handles notification-related operations
 type NotificationService struct {
-	DB *sql.DB
+	DB            *sql.DB
+	Hub           interface{}       // WebSocket hub for broadcasting notifications
+	BroadcastFunc func(interface{}) // Custom broadcast function
 }
 
 // NewNotificationService creates a new NotificationService
 func NewNotificationService(db *sql.DB) *NotificationService {
-	return &NotificationService{DB: db}
+	return &NotificationService{DB: db, Hub: nil}
+}
+
+// NewNotificationServiceWithHub creates a new NotificationService with WebSocket hub
+func NewNotificationServiceWithHub(db *sql.DB, hub interface{}) *NotificationService {
+	return &NotificationService{DB: db, Hub: hub}
+}
+
+// SetBroadcastFunction sets a custom broadcast function
+func (s *NotificationService) SetBroadcastFunction(fn func(interface{})) {
+	s.BroadcastFunc = fn
 }
 
 // Create creates a new notification
@@ -63,6 +75,9 @@ func (s *NotificationService) Create(notification *Notification) error {
 	if err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
 	}
+
+	// Broadcast notification via WebSocket if hub is available
+	s.broadcastNotification(notification)
 
 	return nil
 }
@@ -279,6 +294,12 @@ func (s *NotificationService) enhanceNotificationData(notification *Notification
 		return s.enhancePostLikeNotification(notification)
 	case NotificationTypePostComment:
 		return s.enhancePostCommentNotification(notification)
+	case NotificationTypeGroupEventCreated:
+		return s.enhanceGroupEventNotification(notification)
+	case NotificationTypeGroupInvite, NotificationTypeGroupJoinRequest, NotificationTypeGroupJoinApproved, NotificationTypeGroupJoinRejected:
+		return s.enhanceGroupNotification(notification)
+	case NotificationTypeEventInvite:
+		return s.enhanceEventInviteNotification(notification)
 	default:
 		return nil
 	}
@@ -302,18 +323,41 @@ func (s *NotificationService) enhancePostLikeNotification(notification *Notifica
 		return nil
 	}
 
-	// Fetch post information
+	// Fetch post information - check both regular posts and group posts
 	var postContent string
+	var groupID sql.NullString
+
+	// First try regular posts table
 	err := s.DB.QueryRow("SELECT content FROM posts WHERE id = ?", postID).Scan(&postContent)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Post might have been deleted
-			data["postContent"] = "a deleted post"
+			// Try group posts table
+			err = s.DB.QueryRow("SELECT content, group_id FROM group_posts WHERE id = ?", postID).Scan(&postContent, &groupID)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					// Post might have been deleted
+					data["postContent"] = "a deleted post"
+				} else {
+					return fmt.Errorf("failed to fetch group post content: %w", err)
+				}
+			} else {
+				// It's a group post, fetch group name
+				if groupID.Valid && groupID.String != "" {
+					var groupName string
+					err := s.DB.QueryRow("SELECT name FROM groups WHERE id = ?", groupID.String).Scan(&groupName)
+					if err == nil {
+						data["groupId"] = groupID.String
+						data["groupName"] = groupName
+					}
+				}
+			}
 		} else {
 			return fmt.Errorf("failed to fetch post content: %w", err)
 		}
-	} else {
-		// Truncate content if too long
+	}
+
+	// Truncate content if too long and we have content
+	if postContent != "" {
 		if len(postContent) > 50 {
 			postContent = postContent[:50] + "..."
 		}
@@ -346,16 +390,37 @@ func (s *NotificationService) enhancePostCommentNotification(notification *Notif
 	postID, _ := data["postId"].(string)
 	comment, _ := data["comment"].(string)
 
-	// If we have post ID, get post content for context
+	// If we have post ID, get post content and group info for context
 	if postID != "" {
 		var postContent string
+		var groupID sql.NullString
+
+		// First try regular posts table
 		err := s.DB.QueryRow("SELECT content FROM posts WHERE id = ?", postID).Scan(&postContent)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				data["postContent"] = "a deleted post"
+				// Try group posts table
+				err = s.DB.QueryRow("SELECT content, group_id FROM group_posts WHERE id = ?", postID).Scan(&postContent, &groupID)
+				if err != nil {
+					if err == sql.ErrNoRows {
+						data["postContent"] = "a deleted post"
+					}
+				} else {
+					// It's a group post, fetch group name
+					if groupID.Valid && groupID.String != "" {
+						var groupName string
+						err := s.DB.QueryRow("SELECT name FROM groups WHERE id = ?", groupID.String).Scan(&groupName)
+						if err == nil {
+							data["groupId"] = groupID.String
+							data["groupName"] = groupName
+						}
+					}
+				}
 			}
-		} else {
-			// Truncate content if too long
+		}
+
+		// Truncate content if too long and we have content
+		if postContent != "" {
 			if len(postContent) > 50 {
 				postContent = postContent[:50] + "..."
 			}
@@ -376,4 +441,208 @@ func (s *NotificationService) enhancePostCommentNotification(notification *Notif
 	notification.Data = string(updatedData)
 
 	return nil
+}
+
+// enhanceGroupEventNotification adds event details to group event notifications
+func (s *NotificationService) enhanceGroupEventNotification(notification *Notification) error {
+	if notification.Data == "" {
+		return nil
+	}
+
+	// Parse the existing data
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(notification.Data), &data); err != nil {
+		return fmt.Errorf("failed to parse notification data: %w", err)
+	}
+
+	// Get event ID from data
+	eventID, ok := data["eventId"].(string)
+	if !ok {
+		return nil
+	}
+
+	// Fetch event information
+	var eventTitle, eventLocation string
+	var startTime, endTime time.Time
+	err := s.DB.QueryRow(`
+		SELECT title, location, start_time, end_time
+		FROM events
+		WHERE id = ?
+	`, eventID).Scan(&eventTitle, &eventLocation, &startTime, &endTime)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Event might have been deleted
+			data["eventTitle"] = "a deleted event"
+		} else {
+			return fmt.Errorf("failed to fetch event details: %w", err)
+		}
+	} else {
+		// Add event details to data
+		data["eventTitle"] = eventTitle
+		if eventLocation != "" {
+			data["eventLocation"] = eventLocation
+		}
+		data["eventStartTime"] = startTime.Format(time.RFC3339)
+		data["eventEndTime"] = endTime.Format(time.RFC3339)
+	}
+
+	// Update notification data
+	updatedData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated data: %w", err)
+	}
+	notification.Data = string(updatedData)
+
+	return nil
+}
+
+// enhanceGroupNotification adds group details to group-related notifications
+func (s *NotificationService) enhanceGroupNotification(notification *Notification) error {
+	if notification.Data == "" {
+		return nil
+	}
+
+	// Parse the existing data
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(notification.Data), &data); err != nil {
+		return fmt.Errorf("failed to parse notification data: %w", err)
+	}
+
+	// Get group ID from data
+	groupID, ok := data["groupId"].(string)
+	if !ok {
+		return nil
+	}
+
+	// Fetch group information if not already present
+	if _, hasGroupName := data["groupName"]; !hasGroupName {
+		var groupName string
+		err := s.DB.QueryRow("SELECT name FROM groups WHERE id = ?", groupID).Scan(&groupName)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				data["groupName"] = "a deleted group"
+			} else {
+				return fmt.Errorf("failed to fetch group name: %w", err)
+			}
+		} else {
+			data["groupName"] = groupName
+		}
+
+		// Update notification data
+		updatedData, err := json.Marshal(data)
+		if err != nil {
+			return fmt.Errorf("failed to marshal updated data: %w", err)
+		}
+		notification.Data = string(updatedData)
+	}
+
+	return nil
+}
+
+// enhanceEventInviteNotification adds event details to event invite notifications
+func (s *NotificationService) enhanceEventInviteNotification(notification *Notification) error {
+	if notification.Data == "" {
+		return nil
+	}
+
+	// Parse the existing data
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(notification.Data), &data); err != nil {
+		return fmt.Errorf("failed to parse notification data: %w", err)
+	}
+
+	// Get event ID from data
+	eventID, ok := data["eventId"].(string)
+	if !ok {
+		return nil
+	}
+
+	// Fetch event information
+	var eventTitle, eventLocation string
+	var startTime, endTime time.Time
+	err := s.DB.QueryRow(`
+		SELECT title, location, start_time, end_time
+		FROM events
+		WHERE id = ?
+	`, eventID).Scan(&eventTitle, &eventLocation, &startTime, &endTime)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Event might have been deleted
+			data["eventTitle"] = "a deleted event"
+		} else {
+			return fmt.Errorf("failed to fetch event details: %w", err)
+		}
+	} else {
+		// Add event details to data
+		data["eventTitle"] = eventTitle
+		if eventLocation != "" {
+			data["eventLocation"] = eventLocation
+		}
+		data["eventStartTime"] = startTime.Format(time.RFC3339)
+		data["eventEndTime"] = endTime.Format(time.RFC3339)
+	}
+
+	// Update notification data
+	updatedData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated data: %w", err)
+	}
+	notification.Data = string(updatedData)
+
+	return nil
+}
+
+// BroadcastNotification broadcasts a notification via WebSocket
+func (s *NotificationService) BroadcastNotification(notification *Notification) {
+	if s.Hub == nil {
+		return
+	}
+
+	// Enhance notification data before broadcasting
+	if err := s.enhanceNotificationData(notification); err != nil {
+		// Log error but continue with broadcast
+		fmt.Printf("Warning: failed to enhance notification data for broadcast: %v\n", err)
+	}
+
+	// Use the custom broadcast function if available
+	if s.BroadcastFunc != nil {
+		s.BroadcastFunc(notification)
+		fmt.Printf("Notification broadcast sent for user %s: %s\n", notification.UserID, notification.Type)
+	} else {
+		fmt.Printf("Warning: No broadcast function available for notifications\n")
+	}
+}
+
+// sendNotificationBroadcast sends the notification broadcast
+// This will be overridden by the handler to use the actual hub
+func (s *NotificationService) sendNotificationBroadcast(data []byte) {
+	// Default implementation - just log
+	fmt.Printf("Notification broadcast ready: %s\n", string(data))
+}
+
+// broadcastNotification is the internal method called during Create
+func (s *NotificationService) broadcastNotification(notification *Notification) {
+	// Enhance notification with sender information before broadcasting
+	if notification.SenderID != "" {
+		sender := &User{}
+		err := s.DB.QueryRow(`
+			SELECT id, username, full_name, profile_picture
+			FROM users
+			WHERE id = ?
+		`, notification.SenderID).Scan(
+			&sender.ID, &sender.Username, &sender.FullName, &sender.ProfilePicture,
+		)
+		if err == nil {
+			notification.Sender = sender
+		}
+	}
+
+	if s.BroadcastFunc != nil {
+		s.BroadcastFunc(notification)
+	} else {
+		// Fallback to the public method
+		s.BroadcastNotification(notification)
+	}
 }
