@@ -476,6 +476,15 @@ export default function Chat() {
     }
   };
 
+  const emojiList = ['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💯',"👷🏿","🖐","🤚🏼","🖐","🤚🏻","🤚","💋","❤‍🔥","😈","🤯","🧐","🤮","🤔","🤒","🤚🏾","🤛","👊","✊🏿","👊🏽","🤝🏼","💅","👩🏻‍🍳",
+    "🇰🇪",];
+  const [showEmojis, setShowEmojis] = useState(false);
+
+  const handleEmojiClick = (emoji) => {
+    handleTyping(newMessage + emoji); // Append emoji to message
+  };
+
+
   return (
     <ProtectedRoute>
       <div className={styles.chatContainer}>
@@ -623,18 +632,22 @@ export default function Chat() {
               </div>
 
               <form onSubmit={handleSendMessage} className={styles.messageForm}>
-                <div className={styles.emojiBar}>
-                  {['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💯'].map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className={styles.emojiButton}
-                      onClick={() => insertEmoji(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
+
+                {showEmojis && (
+                    <div className={styles.emojiBar}>
+                      {emojiList.map((emoji,key) => (
+                          <button
+                              key={key}
+                              type="button"
+                              className={styles.emojiButton}
+                              onClick={() => handleEmojiClick(emoji)}
+                          >
+                            {emoji}
+                          </button>
+                      ))}
+                    </div>
+                )}
+
                 <div className={styles.inputContainer}>
                   <input
                     type="text"
@@ -643,6 +656,16 @@ export default function Chat() {
                     onChange={(e) => handleTyping(e.target.value)}
                     className={styles.messageInput}
                   />
+
+                  {/*toggle emoji box*/}
+                  <button
+                      type="button"
+                      onClick={() => setShowEmojis(!showEmojis)}
+                      className={styles.emojiToggleButton}
+                  >
+                    {showEmojis ? 'hide emojis' : 'show more emojis'}
+                  </button>
+
                   <Button
                     type="submit"
                     variant="primary"
