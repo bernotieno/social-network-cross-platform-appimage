@@ -128,6 +128,7 @@ export default function CreateGroup() {
                         src={coverPhotoPreview}
                         alt="Cover photo preview"
                         fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 60vw"
                         style={{ objectFit: 'cover' }}
                       />
                     )}
