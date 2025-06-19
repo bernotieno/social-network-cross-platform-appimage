@@ -151,6 +151,13 @@
   color: #050505;
 }
 
+.eventDetails {
+  font-size: 0.875rem;
+  color: #65676b;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
 .notificationTime {
   font-size: 0.8rem;
   color: #65676b;
