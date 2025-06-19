@@ -366,8 +366,6 @@ func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithSuccess(w, http.StatusOK, "Group member removed successfully", nil)
 }
 
-
-
 // DeleteGroup handles deleting a group
 func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
@@ -806,6 +804,63 @@ func (h *Handler) CreateGroupEvent(w http.ResponseWriter, r *http.Request) {
 	// Add creator to event for response
 	event.Creator = user
 
+	// Create notifications for all group members (except the creator)
+	go func() {
+		// Get all group members
+		members, err := h.GroupMemberService.GetMembers(groupID, 1000, 0) // Get up to 1000 members
+		if err != nil {
+			// Log error but don't fail the request
+			// TODO: Add proper logging
+			return
+		}
+
+		// Also get the group creator if they're not already in the members list
+		group, err := h.GroupService.GetByID(groupID, userID)
+		if err != nil {
+			// Log error but don't fail the request
+			return
+		}
+
+		// Create a map to track unique user IDs to avoid duplicate notifications
+		memberUserIDs := make(map[string]bool)
+		var notifications []*models.Notification
+
+		// Add notifications for all group members
+		for _, member := range members {
+			if member.UserID != userID { // Don't notify the event creator
+				memberUserIDs[member.UserID] = true
+				notification := &models.Notification{
+					UserID:   member.UserID,
+					SenderID: userID,
+					Type:     models.NotificationTypeGroupEventCreated,
+					Content:  "created a new event in " + group.Name,
+					Data:     `{"eventId":"` + event.ID + `","groupId":"` + groupID + `","eventTitle":"` + event.Title + `"}`,
+				}
+				notifications = append(notifications, notification)
+			}
+		}
+
+		// Add notification for group creator if they're not already included and not the event creator
+		if group.CreatorID != userID && !memberUserIDs[group.CreatorID] {
+			notification := &models.Notification{
+				UserID:   group.CreatorID,
+				SenderID: userID,
+				Type:     models.NotificationTypeGroupEventCreated,
+				Content:  "created a new event in " + group.Name,
+				Data:     `{"eventId":"` + event.ID + `","groupId":"` + groupID + `","eventTitle":"` + event.Title + `"}`,
+			}
+			notifications = append(notifications, notification)
+		}
+
+		// Create all notifications in batch
+		if len(notifications) > 0 {
+			if err := h.NotificationService.CreateBatch(notifications); err != nil {
+				// Log error but don't fail the request
+				// TODO: Add proper logging
+			}
+		}
+	}()
+
 	utils.RespondWithSuccess(w, http.StatusCreated, "Event created successfully", map[string]interface{}{
 		"event": event,
 	})
@@ -1083,10 +1138,6 @@ func (h *Handler) ApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-
-
-
-	
 
 	// Get the pending member request
 	member, err := h.GroupMemberService.GetByGroupAndUser(groupID, req.UserID)
