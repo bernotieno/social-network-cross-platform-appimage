@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -1476,17 +1477,39 @@ func (h *Handler) LikeGroupPost(w http.ResponseWriter, r *http.Request) {
 
 	// Create notification for post owner (if not the same user)
 	if post.UserID != userID {
+		// Get group info for notification
+		group, err := h.GroupService.GetByID(groupID, userID)
+		if err != nil {
+			log.Printf("Error getting group for notification: %v", err)
+		}
+
+		// Prepare notification data with post content and group info
+		postContent := post.Content
+		if len(postContent) > 50 {
+			postContent = postContent[:50] + "..."
+		}
+
+		notificationData := map[string]interface{}{
+			"postId":      postID,
+			"groupId":     groupID,
+			"postContent": postContent,
+		}
+		if group != nil {
+			notificationData["groupName"] = group.Name
+		}
+		dataJSON, _ := json.Marshal(notificationData)
+
 		notification := &models.Notification{
 			UserID:   post.UserID,
 			SenderID: userID,
 			Type:     "post_like",
 			Content:  "liked your group post",
-			Data:     `{"postId":"` + postID + `","groupId":"` + groupID + `"}`,
+			Data:     string(dataJSON),
 		}
 
 		if err := h.NotificationService.Create(notification); err != nil {
 			// Log error but don't fail the request
-			// TODO: Add proper logging
+			log.Printf("Error creating notification: %v", err)
 		}
 	}
 
@@ -1498,9 +1521,9 @@ func (h *Handler) LikeGroupPost(w http.ResponseWriter, r *http.Request) {
 		"action":  "like",
 	}
 
-	message := &websocket.Message{
-		Type:    "group_post_like",
-		Content: likeEvent,
+	message := map[string]interface{}{
+		"type":    "group_post_like",
+		"payload": likeEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
@@ -1572,9 +1595,9 @@ func (h *Handler) UnlikeGroupPost(w http.ResponseWriter, r *http.Request) {
 		"action":  "unlike",
 	}
 
-	message := &websocket.Message{
-		Type:    "group_post_like",
-		Content: unlikeEvent,
+	message := map[string]interface{}{
+		"type":    "group_post_like",
+		"payload": unlikeEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
@@ -1772,9 +1795,9 @@ func (h *Handler) AddGroupPostComment(w http.ResponseWriter, r *http.Request) {
 		"comment": comment,
 	}
 
-	message := &websocket.Message{
-		Type:    "group_post_comment",
-		Content: newCommentEvent,
+	message := map[string]interface{}{
+		"type":    "group_post_comment",
+		"payload": newCommentEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
@@ -1861,9 +1884,9 @@ func (h *Handler) DeleteGroupPostComment(w http.ResponseWriter, r *http.Request)
 		"commentId": commentID,
 	}
 
-	message := &websocket.Message{
-		Type:    "group_post_comment_delete",
-		Content: deleteCommentEvent,
+	message := map[string]interface{}{
+		"type":    "group_post_comment_delete",
+		"payload": deleteCommentEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
