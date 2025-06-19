@@ -193,6 +193,8 @@ export default function GroupPage() {
                 src={getImageUrl(group.coverPhoto)}
                 alt={group.name}
                 fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 60vw"
+                priority={true} // Group cover is above the fold
                 style={{ objectFit: 'cover' }}
                 onError={(e) => {
                   console.error('Cover photo failed to load:', e.target.src);
