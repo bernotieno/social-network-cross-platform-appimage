@@ -3,14 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { notificationAPI } from '@/utils/api';
 import { useAuth } from './useAuth';
+import { useToast } from '@/contexts/ToastContext';
 import { initializeSocket, subscribeToNotifications } from '@/utils/socket';
+import { playNotificationSound } from '@/utils/notificationSound';
 
 const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { showNotification } = useToast();
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async (isAutoRefresh = false) => {
@@ -60,14 +63,28 @@ const useNotifications = () => {
         // Try to initialize WebSocket
         const socket = initializeSocket();
         if (socket) {
-          console.log('WebSocket initialized successfully for notifications');
           unsubscribe = subscribeToNotifications((notification) => {
-            console.log('Received real-time notification:', notification);
-            setNotifications(prev => [notification, ...prev]);
-            setUnreadCount(prev => prev + 1);
+            // Filter notifications - only process if it's for the current user
+            if (notification.userID === user?.id) {
+              // Update notifications list and unread count
+              setNotifications(prev => [notification, ...prev]);
+              setUnreadCount(prev => prev + 1);
+
+              // Show toast notification
+              try {
+                showNotification(notification);
+              } catch (toastError) {
+                console.error('Error showing toast notification:', toastError);
+              }
+
+              // Play notification sound
+              try {
+                playNotificationSound(notification.type);
+              } catch (soundError) {
+                console.error('Error playing notification sound:', soundError);
+              }
+            }
           });
-        } else {
-          console.warn('WebSocket initialization returned null');
         }
       } catch (error) {
         console.warn('WebSocket initialization failed, falling back to polling:', error);
@@ -114,7 +131,7 @@ const useNotifications = () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
-  }, [isAuthenticated, fetchNotifications]);
+  }, [isAuthenticated, user, fetchNotifications, showNotification]);
 
   // Mark notification as read
   const markAsRead = async (notificationId) => {
