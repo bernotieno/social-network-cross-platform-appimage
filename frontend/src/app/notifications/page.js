@@ -190,6 +190,12 @@ export default function Notifications() {
             </div>
           </>
         );
+      case 'group_event_created':
+        return (
+          <span className={styles.notificationText}>
+            created a new event "{notificationData.eventTitle || 'Untitled Event'}" in the group
+          </span>
+        );
       default:
         return (
           <span className={styles.notificationText}>
