@@ -24,6 +24,7 @@ const (
 	NotificationTypeGroupJoinApproved NotificationType = "group_join_approved"
 	NotificationTypeGroupJoinRejected NotificationType = "group_join_rejected"
 	NotificationTypeEventInvite       NotificationType = "event_invite"
+	NotificationTypeGroupEventCreated NotificationType = "group_event_created"
 )
 
 // Notification represents a notification
@@ -61,6 +62,56 @@ func (s *NotificationService) Create(notification *Notification) error {
 	`, notification.ID, notification.UserID, notification.SenderID, notification.Type, notification.Content, notification.Data, notification.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
+	}
+
+	return nil
+}
+
+// CreateBatch creates multiple notifications in a single transaction
+func (s *NotificationService) CreateBatch(notifications []*Notification) error {
+	if len(notifications) == 0 {
+		return nil
+	}
+
+	// Start transaction
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Prepare statement
+	stmt, err := tx.Prepare(`
+		INSERT INTO notifications (id, user_id, sender_id, type, content, data, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Insert all notifications
+	for _, notification := range notifications {
+		notification.ID = uuid.New().String()
+		notification.CreatedAt = time.Now()
+
+		_, err := stmt.Exec(
+			notification.ID,
+			notification.UserID,
+			notification.SenderID,
+			notification.Type,
+			notification.Content,
+			notification.Data,
+			notification.CreatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create notification: %w", err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
