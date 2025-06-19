@@ -70,9 +70,8 @@ func (s *PostService) GetByID(id string, currentUserID string) (*Post, error) {
 	post := &Post{User: &User{}}
 	var image sql.NullString
 	var profilePicture sql.NullString
-	var groupID sql.NullString // Add group_id
 	err := s.DB.QueryRow(`
-		SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at, p.group_id,
+		SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
 			(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
 			(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
@@ -81,7 +80,7 @@ func (s *PostService) GetByID(id string, currentUserID string) (*Post, error) {
 		JOIN users u ON p.user_id = u.id
 		WHERE p.id = ?
 	`, currentUserID, id).Scan(
-		&post.ID, &post.UserID, &post.Content, &image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt, &groupID,
+		&post.ID, &post.UserID, &post.Content, &image, &post.Visibility, &post.CreatedAt, &post.UpdatedAt,
 		&post.User.ID, &post.User.Username, &post.User.FullName, &profilePicture,
 		&post.LikesCount, &post.CommentsCount, &post.IsLiked,
 	)
@@ -101,34 +100,8 @@ func (s *PostService) GetByID(id string, currentUserID string) (*Post, error) {
 	}
 
 	// Check if the current user can view this post
-	if groupID.Valid {
-		// It's a group post, check group privacy
-		var groupPrivacy GroupPrivacy
-		err = s.DB.QueryRow("SELECT privacy FROM groups WHERE id = ?", groupID.String).Scan(&groupPrivacy)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return nil, errors.New("group not found for post")
-			}
-			return nil, fmt.Errorf("failed to get group privacy for post: %w", err)
-		}
-
-		if groupPrivacy == GroupPrivacyPrivate {
-			// Check if the current user is a member of the group
-			var isMember bool
-			err = s.DB.QueryRow(`
-				SELECT COUNT(*) > 0
-				FROM group_members
-				WHERE group_id = ? AND user_id = ? AND status = 'accepted'
-			`, groupID.String, currentUserID).Scan(&isMember)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check group membership for post: %w", err)
-			}
-
-			if !isMember {
-				return nil, errors.New("not authorized to view this group post")
-			}
-		}
-	} else if post.Visibility != PostVisibilityPublic && post.UserID != currentUserID {
+	// Regular posts don't have group associations, so we only check post visibility
+	if post.Visibility != PostVisibilityPublic && post.UserID != currentUserID {
 		// For followers-only posts, check if the current user is a follower
 		if post.Visibility == PostVisibilityFollowers {
 			var isFollowing bool
