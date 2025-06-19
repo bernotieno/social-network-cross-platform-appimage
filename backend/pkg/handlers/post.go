@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -131,9 +132,9 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 			"post": post,
 		}
 
-		message := &websocket.Message{
-			Type:    "new_post",
-			Content: newPostEvent,
+		message := map[string]interface{}{
+			"type":    "new_post",
+			"payload": newPostEvent,
 		}
 
 		messageData, _ := json.Marshal(message)
@@ -389,9 +390,12 @@ func (h *Handler) LikePost(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	postID := vars["id"]
 
+	log.Printf("LikePost: Attempting to like post %s by user %s", postID, userID)
+
 	// Check if post exists and user can view it
 	post, err := h.PostService.GetByID(postID, userID)
 	if err != nil {
+		log.Printf("LikePost: Error getting post %s: %v", postID, err)
 		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
 		return
 	}
@@ -408,17 +412,29 @@ func (h *Handler) LikePost(w http.ResponseWriter, r *http.Request) {
 
 	// Create notification for post owner (if not the same user)
 	if post.UserID != userID {
+		// Prepare notification data with post content
+		postContent := post.Content
+		if len(postContent) > 50 {
+			postContent = postContent[:50] + "..."
+		}
+
+		notificationData := map[string]interface{}{
+			"postId":      postID,
+			"postContent": postContent,
+		}
+		dataJSON, _ := json.Marshal(notificationData)
+
 		notification := &models.Notification{
 			UserID:   post.UserID,
 			SenderID: userID,
 			Type:     "post_like",
 			Content:  "liked your post",
-			Data:     `{"postId":"` + postID + `"}`,
+			Data:     string(dataJSON),
 		}
 
 		if err := h.NotificationService.Create(notification); err != nil {
 			// Log error but don't fail the request
-			// TODO: Add proper logging
+			log.Printf("Error creating notification: %v", err)
 		}
 	}
 
@@ -429,9 +445,9 @@ func (h *Handler) LikePost(w http.ResponseWriter, r *http.Request) {
 		"action": "like",
 	}
 
-	message := &websocket.Message{
-		Type:    "post_like",
-		Content: likeEvent,
+	message := map[string]interface{}{
+		"type":    "post_like",
+		"payload": likeEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
@@ -476,9 +492,9 @@ func (h *Handler) UnlikePost(w http.ResponseWriter, r *http.Request) {
 		"action": "unlike",
 	}
 
-	message := &websocket.Message{
-		Type:    "post_like",
-		Content: unlikeEvent,
+	message := map[string]interface{}{
+		"type":    "post_like",
+		"payload": unlikeEvent,
 	}
 
 	messageData, _ := json.Marshal(message)
