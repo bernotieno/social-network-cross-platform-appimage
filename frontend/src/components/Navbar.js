@@ -6,15 +6,25 @@ import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import useNotifications from '@/hooks/useNotifications';
 import { getImageUrl } from '@/utils/images';
+import NotificationDropdown from '@/components/NotificationDropdown';
 import styles from '@/styles/Navbar.module.css';
 
 const Navbar = () => {
   const { user, isAuthenticated, logout } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { notifications, unreadCount, markAsRead, fetchNotifications } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  const toggleNotificationDropdown = () => {
+    setNotificationDropdownOpen(!notificationDropdownOpen);
+  };
+
+  const closeNotificationDropdown = () => {
+    setNotificationDropdownOpen(false);
   };
 
   return (
@@ -54,12 +64,25 @@ const Navbar = () => {
               <Link href="/chat" className={styles.navLink}>
                 Chat
               </Link>
-              <Link href="/notifications" className={styles.navLink}>
-                Notifications
-                {unreadCount > 0 && (
-                  <span className={styles.badge}>{unreadCount}</span>
-                )}
-              </Link>
+              <div className={styles.notificationDropdown}>
+                <button
+                  className={styles.notificationButton}
+                  onClick={toggleNotificationDropdown}
+                  aria-label="Notifications"
+                >
+                  Notifications
+                  {unreadCount > 0 && (
+                    <span className={styles.badge}>{unreadCount}</span>
+                  )}
+                </button>
+                <NotificationDropdown
+                  notifications={notifications}
+                  isOpen={notificationDropdownOpen}
+                  onClose={closeNotificationDropdown}
+                  onMarkAsRead={markAsRead}
+                  onRefresh={fetchNotifications}
+                />
+              </div>
               <div className={styles.profileDropdown}>
                 <button className={styles.profileButton}>
                   {user?.profilePicture ? (
