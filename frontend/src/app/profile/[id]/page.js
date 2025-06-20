@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { userAPI, postAPI } from '@/utils/api';
-import { getUserProfilePictureUrl, getUserCoverPhotoUrl, getFallbackAvatar } from '@/utils/images';
+import { getUserProfilePictureUrl, getUserCoverPhotoUrl, getFallbackAvatar, validateImageFile } from '@/utils/images';
 import { canViewFullProfile, canViewPosts, canViewFollowers, canViewFollowing, getFollowButtonState } from '@/utils/privacy';
 import Button from '@/components/Button';
 import Post from '@/components/Post';
@@ -57,6 +57,13 @@ export default function ProfilePage() {
     fetchProfileData();
   }, [id]);
 
+  // Refetch profile data when currentUser changes (e.g., after login)
+  useEffect(() => {
+    if (currentUser && profile) {
+      fetchProfileData();
+    }
+  }, [currentUser?.id]);
+
   useEffect(() => {
     if (profile && profile.user) {
       setEditFormData({
@@ -92,17 +99,18 @@ export default function ProfilePage() {
 
       // Fetch user profile
       const profileResponse = await userAPI.getProfile(id);
-      setProfile(profileResponse.data.data);
+      const profileData = profileResponse.data.data;
+      setProfile(profileData);
 
-      // Check if current user is following this profile
-      if (currentUser && !isOwnProfile) {
-        setIsFollowing(profileResponse.data.data.isFollowedByCurrentUser || false);
-        setHasPendingRequest(profileResponse.data.data.hasPendingFollowRequest || false);
-      }
+      // Always set follow state from API response (not just when currentUser exists)
+      // The backend will return the correct follow status if user is authenticated
+      console.log('Profile API response:', profileData);
+      setIsFollowing(profileData.isFollowedByCurrentUser || false);
+      setHasPendingRequest(profileData.hasPendingFollowRequest || false);
 
       // Set followers and following counts
-      setFollowersCount(profileResponse.data.data.followersCount || 0);
-      setFollowingCount(profileResponse.data.data.followingCount || 0);
+      setFollowersCount(profileData.followersCount || 0);
+      setFollowingCount(profileData.followingCount || 0);
 
       // Fetch user posts - always try to fetch, let the backend handle authorization
       try {
