@@ -66,6 +66,27 @@
   justify-content: center;
 }
 
+.notificationDropdown {
+  position: relative;
+}
+
+.notificationButton {
+  background: none;
+  border: none;
+  color: #65676b;
+  text-decoration: none;
+  font-weight: 500;
+  position: relative;
+  transition: color 0.2s;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.notificationButton:hover {
+  color: #10b981;
+}
+
 .profileDropdown {
   position: relative;
 }
@@ -185,6 +206,10 @@
 
   .navLinks.active {
     display: flex;
+  }
+
+  .notificationDropdown {
+    width: 100%;
   }
 
   .profileDropdown {
