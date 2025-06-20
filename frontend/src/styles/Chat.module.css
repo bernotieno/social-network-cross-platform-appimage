@@ -350,8 +350,8 @@
 
 .emojiBar {
   position: absolute;
-  bottom: 60px; /* Adjust as needed */
-  left: 10px;
+  bottom: 60px;
+  left: auto;
   z-index: 999;
   background: #f8f9fa;
   border: 1px solid #dddfe2;
@@ -362,6 +362,22 @@
   gap: 0.25rem;
   width: 260px; /* Adjust to control how many emojis per row */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.emojiBarGroup {
+  position: absolute;
+  bottom: -275px;
+  z-index: 999;
+  background: #f8f9fa;
+  border: 1px solid #dddfe2;
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 0.25rem;
+  width: 260px; /* Adjust to control how many emojis per row */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  left: auto;
 }
 
 .emojiToggleButton {

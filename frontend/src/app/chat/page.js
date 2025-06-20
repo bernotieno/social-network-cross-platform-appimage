@@ -18,6 +18,7 @@ import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import styles from '@/styles/Chat.module.css';
+import emojis from '@/components/emojis'
 
 export default function Chat() {
   const { user } = useAuth();
@@ -433,7 +434,7 @@ export default function Chat() {
 
     // Add message to local state immediately for instant display
     setMessages(prevMessages => {
-      console.log("Adding optimistic message to state:", prevMessages);
+      // console.log("Adding optimistic message to state:", prevMessages);
       return [...prevMessages, optimisticMessage];
     });
 
@@ -476,8 +477,9 @@ export default function Chat() {
     }
   };
 
-  const emojiList = ['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💯',"👷🏿","🖐","🤚🏼","🖐","🤚🏻","🤚","💋","❤‍🔥","😈","🤯","🧐","🤮","🤔","🤒","🤚🏾","🤛","👊","✊🏿","👊🏽","🤝🏼","💅","👩🏻‍🍳",
-    "🇰🇪",];
+  const emojiList = emojis();
+  // const emojiList = ['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💯',"👷🏿","🖐","🤚🏼","🖐","🤚🏻","🤚","💋","❤‍🔥","😈","🤯","🧐","🤮","🤔","🤒","🤚🏾","🤛","👊","✊🏿","👊🏽","🤝🏼","💅","👩🏻‍🍳",
+  //   "🇰🇪",];
   const [showEmojis, setShowEmojis] = useState(false);
 
   const handleEmojiClick = (emoji) => {
