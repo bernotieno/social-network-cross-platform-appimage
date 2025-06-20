@@ -507,18 +507,31 @@ func (h *Handler) FollowUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only send notification for new follow requests/follows
-	if followingUser.IsPrivate && !isFollowing && !hasPending {
-		// Create notification for private account follow request
-		notification := &models.Notification{
-			UserID:   followingID,
-			SenderID: followerID,
-			Type:     models.NotificationTypeFollowRequest,
-			Content:  "requested to follow you",
-			Data:     `{"followRequestId":"` + follow.ID + `"}`,
-		}
-		if err := h.NotificationService.Create(notification); err != nil {
-			log.Printf("Error creating follow request notification: %v", err)
+	// Send notification for new follow requests/follows
+	if !isFollowing && !hasPending {
+		if followingUser.IsPrivate {
+			// Create notification for private account follow request
+			notification := &models.Notification{
+				UserID:   followingID,
+				SenderID: followerID,
+				Type:     models.NotificationTypeFollowRequest,
+				Content:  "requested to follow you",
+				Data:     `{"followRequestId":"` + follow.ID + `"}`,
+			}
+			if err := h.NotificationService.Create(notification); err != nil {
+				log.Printf("Error creating follow request notification: %v", err)
+			}
+		} else {
+			// Create notification for public account new follower
+			notification := &models.Notification{
+				UserID:   followingID,
+				SenderID: followerID,
+				Type:     models.NotificationTypeNewFollower,
+				Content:  "started following you",
+			}
+			if err := h.NotificationService.Create(notification); err != nil {
+				log.Printf("Error creating new follower notification: %v", err)
+			}
 		}
 	}
 
@@ -621,17 +634,19 @@ func (h *Handler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 		user.Password = ""
 
 		userMap := map[string]interface{}{
-			"id":             user.ID,
-			"username":       user.Username,
-			"email":          user.Email,
-			"fullName":       user.FullName,
-			"bio":            user.Bio,
-			"profilePicture": user.ProfilePicture,
-			"coverPhoto":     user.CoverPhoto,
-			"isPrivate":      user.IsPrivate,
-			"createdAt":      user.CreatedAt,
-			"updatedAt":      user.UpdatedAt,
-			"isFollowing":    false, // Default to false
+			"id":                      user.ID,
+			"username":                user.Username,
+			"email":                   user.Email,
+			"fullName":                user.FullName,
+			"bio":                     user.Bio,
+			"profilePicture":          user.ProfilePicture,
+			"coverPhoto":              user.CoverPhoto,
+			"isPrivate":               user.IsPrivate,
+			"createdAt":               user.CreatedAt,
+			"updatedAt":               user.UpdatedAt,
+			"isFollowing":             false, // Default to false
+			"isFollowedByCurrentUser": false, // Default to false
+			"hasPendingFollowRequest": false, // Default to false
 		}
 
 		// Check if current user is following this follower
@@ -639,6 +654,13 @@ func (h *Handler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 			isFollowing, err := h.FollowService.IsFollowing(currentUserID, user.ID)
 			if err == nil {
 				userMap["isFollowing"] = isFollowing
+				userMap["isFollowedByCurrentUser"] = isFollowing
+			}
+
+			// Check for pending request
+			hasPending, err := h.FollowService.HasPendingRequest(currentUserID, user.ID)
+			if err == nil {
+				userMap["hasPendingFollowRequest"] = hasPending
 			}
 		}
 
@@ -722,17 +744,19 @@ func (h *Handler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 		user.Password = ""
 
 		userMap := map[string]interface{}{
-			"id":             user.ID,
-			"username":       user.Username,
-			"email":          user.Email,
-			"fullName":       user.FullName,
-			"bio":            user.Bio,
-			"profilePicture": user.ProfilePicture,
-			"coverPhoto":     user.CoverPhoto,
-			"isPrivate":      user.IsPrivate,
-			"createdAt":      user.CreatedAt,
-			"updatedAt":      user.UpdatedAt,
-			"isFollowing":    true, // Default to true since this is the following list
+			"id":                      user.ID,
+			"username":                user.Username,
+			"email":                   user.Email,
+			"fullName":                user.FullName,
+			"bio":                     user.Bio,
+			"profilePicture":          user.ProfilePicture,
+			"coverPhoto":              user.CoverPhoto,
+			"isPrivate":               user.IsPrivate,
+			"createdAt":               user.CreatedAt,
+			"updatedAt":               user.UpdatedAt,
+			"isFollowing":             true,  // Default to true since this is the following list
+			"isFollowedByCurrentUser": true,  // Default to true since this is the following list
+			"hasPendingFollowRequest": false, // Default to false
 		}
 
 		// Check if current user is following this user (should be true for following list)
@@ -740,6 +764,13 @@ func (h *Handler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 			isFollowing, err := h.FollowService.IsFollowing(currentUserID, user.ID)
 			if err == nil {
 				userMap["isFollowing"] = isFollowing
+				userMap["isFollowedByCurrentUser"] = isFollowing
+			}
+
+			// Check for pending request (shouldn't be any for following list, but check anyway)
+			hasPending, err := h.FollowService.HasPendingRequest(currentUserID, user.ID)
+			if err == nil {
+				userMap["hasPendingFollowRequest"] = hasPending
 			}
 		}
 
