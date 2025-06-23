@@ -46,45 +46,53 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
   const canEditPost = isOwnPost; // Only post author can edit
 
   const handleLikeToggle = async () => {
+    // Store original state for potential rollback
+    const originalIsLiked = isLiked;
+    const originalLikesCount = likesCount;
+
     try {
       console.log('Like toggle clicked:', { isLiked, postId: post.id, isGroupPost, groupId });
 
+      // Optimistic update
+      const newIsLiked = !isLiked;
+      const newLikesCount = newIsLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
+
+      setIsLiked(newIsLiked);
+      setLikesCount(newLikesCount);
+
       if (isGroupPost && groupId) {
         // Use group post API
-        if (isLiked) {
+        if (originalIsLiked) {
           console.log('Unliking group post...');
           const response = await groupAPI.unlikeGroupPost(groupId, post.id);
           console.log('Unlike response:', response);
-          setIsLiked(false);
-          setLikesCount(prev => prev - 1);
         } else {
           console.log('Liking group post...');
           const response = await groupAPI.likeGroupPost(groupId, post.id);
           console.log('Like response:', response);
-          setIsLiked(true);
-          setLikesCount(prev => prev + 1);
         }
       } else {
         // Use regular post API
-        if (isLiked) {
+        if (originalIsLiked) {
           console.log('Unliking regular post...');
           const response = await postAPI.unlikePost(post.id);
           console.log('Unlike response:', response);
-          setIsLiked(false);
-          setLikesCount(prev => prev - 1);
         } else {
           console.log('Liking regular post...');
           const response = await postAPI.likePost(post.id);
           console.log('Like response:', response);
-          setIsLiked(true);
-          setLikesCount(prev => prev + 1);
         }
       }
     } catch (error) {
       console.error('Error toggling like:', error);
       console.error('Error details:', error.response?.data || error.message);
+
       // Revert the optimistic update on error
-      // The state will remain as it was before the failed attempt
+      setIsLiked(originalIsLiked);
+      setLikesCount(originalLikesCount);
+
+      // Show error message to user
+      showAlert('Failed to update like. Please try again.', 'error');
     }
   };
 
@@ -251,19 +259,15 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
       // Subscribe to group post events
       unsubscribeLikes = subscribeToGroupPostLikes((data) => {
         if (post?.id && data.postId === post.id && data.groupId === groupId) {
-          if (data.action === 'like') {
-            setLikesCount(prev => prev + 1);
-            // If the current user liked it, update the like state
-            if (data.userId === user?.id) {
-              setIsLiked(true);
-            }
-          } else if (data.action === 'unlike') {
-            setLikesCount(prev => Math.max(0, prev - 1));
-            // If the current user unliked it, update the like state
-            if (data.userId === user?.id) {
-              setIsLiked(false);
+          // Only update state if it's NOT the current user (to avoid double updates from optimistic updates)
+          if (data.userId !== user?.id) {
+            if (data.action === 'like') {
+              setLikesCount(prev => prev + 1);
+            } else if (data.action === 'unlike') {
+              setLikesCount(prev => Math.max(0, prev - 1));
             }
           }
+          // Note: We don't update isLiked state here for current user since optimistic update handles it
         }
       });
 
@@ -286,19 +290,15 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
       // Subscribe to regular post events
       unsubscribeLikes = subscribeToPostLikes((data) => {
         if (post?.id && data.postId === post.id) {
-          if (data.action === 'like') {
-            setLikesCount(prev => prev + 1);
-            // If the current user liked it, update the like state
-            if (data.userId === user?.id) {
-              setIsLiked(true);
-            }
-          } else if (data.action === 'unlike') {
-            setLikesCount(prev => Math.max(0, prev - 1));
-            // If the current user unliked it, update the like state
-            if (data.userId === user?.id) {
-              setIsLiked(false);
+          // Only update state if it's NOT the current user (to avoid double updates from optimistic updates)
+          if (data.userId !== user?.id) {
+            if (data.action === 'like') {
+              setLikesCount(prev => prev + 1);
+            } else if (data.action === 'unlike') {
+              setLikesCount(prev => Math.max(0, prev - 1));
             }
           }
+          // Note: We don't update isLiked state here for current user since optimistic update handles it
         }
       });
 
