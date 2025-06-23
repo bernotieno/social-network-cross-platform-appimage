@@ -53,7 +53,7 @@ type Handler struct {
 
 // NewHandler creates a new Handler
 func NewHandler(db *sql.DB, hub *websocket.Hub) *Handler {
-	return &Handler{
+	handler := &Handler{
 		DB:                   db,
 		Hub:                  hub,
 		UserService:          models.NewUserService(db),
@@ -69,7 +69,7 @@ func NewHandler(db *sql.DB, hub *websocket.Hub) *Handler {
 		EventService:         models.NewEventService(db),
 		EventResponseService: models.NewEventResponseService(db),
 		MessageService:       models.NewMessageService(db),
-		NotificationService:  models.NewNotificationService(db),
+		NotificationService:  models.NewNotificationServiceWithHub(db, hub),
 		Upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -78,6 +78,57 @@ func NewHandler(db *sql.DB, hub *websocket.Hub) *Handler {
 				return true
 			},
 		},
+	}
+
+	// Set up notification broadcasting
+	handler.setupNotificationBroadcasting()
+
+	return handler
+}
+
+// setupNotificationBroadcasting sets up notification broadcasting functionality
+func (h *Handler) setupNotificationBroadcasting() {
+	// Override the notification service's broadcast method to use our hub
+	if h.NotificationService != nil && h.Hub != nil {
+		// We'll create a custom broadcast function
+		h.NotificationService.SetBroadcastFunction(h.broadcastNotificationToUsers)
+	}
+}
+
+// broadcastNotificationToUsers broadcasts a notification to the target user
+func (h *Handler) broadcastNotificationToUsers(notification interface{}) {
+	// Type assert to get the notification
+	notif, ok := notification.(*models.Notification)
+	if !ok {
+		log.Printf("Invalid notification type for broadcasting")
+		return
+	}
+
+	// Create broadcast message
+	message := map[string]interface{}{
+		"type":    "notification",
+		"payload": notif,
+	}
+
+	// Serialize the message
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling notification for broadcast: %v", err)
+		return
+	}
+
+	// Send notification only to the specific user who should receive it
+	// Check if the target user is online
+	if targetClient, exists := h.Hub.OnlineUsers[notif.UserID]; exists {
+		select {
+		case targetClient.Send <- data:
+			log.Printf("Sent notification to user %s: %s", notif.UserID, notif.Content)
+		default:
+			// Client's send buffer is full, log but don't fail
+			log.Printf("Failed to send notification to user %s: send buffer full", notif.UserID)
+		}
+	} else {
+		log.Printf("User %s is not online, notification will be delivered when they connect", notif.UserID)
 	}
 }
 

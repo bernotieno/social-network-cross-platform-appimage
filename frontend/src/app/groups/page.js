@@ -173,6 +173,7 @@ export default function Groups() {
                       src={getImageUrl(group.coverPhoto)}
                       alt={group.name}
                       fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       style={{ objectFit: 'cover' }}
                       onError={(e) => {
                         console.error('Group cover photo failed to load:', e.target.src);

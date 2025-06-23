@@ -27,29 +27,33 @@ export const initializeSocket = () => {
 
       // Socket event listeners
       socket.onopen = () => {
-        console.log('Socket connected');
+        console.log('🔌 WebSocket connected successfully');
         // Trigger custom 'connect' event
         triggerEvent('connect');
       };
 
       socket.onclose = () => {
-        console.log('Socket disconnected');
+        console.log('🔌 WebSocket disconnected');
         // Trigger custom 'disconnect' event
         triggerEvent('disconnect');
       };
 
       socket.onerror = (error) => {
-        console.error('Socket connection error:', error);
-        console.error('Socket connection error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        console.error('🔌 WebSocket connection error:', error);
+        console.error('🔌 WebSocket connection error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
         // Trigger custom 'connect_error' event
         triggerEvent('connect_error', error);
       };
 
       socket.onmessage = (event) => {
         try {
+          console.log('📨 WebSocket message received:', event.data);
           const data = JSON.parse(event.data);
+          console.log('📨 Parsed WebSocket data:', data);
+
           // Trigger custom event based on message type
           if (data.type) {
+            console.log('📨 Triggering event:', data.type, 'with payload:', data.payload);
             triggerEvent(data.type, data.payload);
           }
         } catch (error) {
@@ -224,6 +228,36 @@ export const subscribeToUserPresence = (callback) => {
 export const subscribeToCommentDeletions = (callback) => {
   on('comment_deleted', callback);
   return () => off('comment_deleted', callback);
+};
+
+/**
+ * Subscribe to group post likes/unlikes
+ * @param {function} callback - Function to call when a group post is liked/unliked
+ * @returns {function} - Function to unsubscribe
+ */
+export const subscribeToGroupPostLikes = (callback) => {
+  on('group_post_like', callback);
+  return () => off('group_post_like', callback);
+};
+
+/**
+ * Subscribe to group post comments
+ * @param {function} callback - Function to call when a new comment is added to a group post
+ * @returns {function} - Function to unsubscribe
+ */
+export const subscribeToGroupPostComments = (callback) => {
+  on('group_post_comment', callback);
+  return () => off('group_post_comment', callback);
+};
+
+/**
+ * Subscribe to group post comment deletions
+ * @param {function} callback - Function to call when a comment is deleted from a group post
+ * @returns {function} - Function to unsubscribe
+ */
+export const subscribeToGroupPostCommentDeletions = (callback) => {
+  on('group_post_comment_delete', callback);
+  return () => off('group_post_comment_delete', callback);
 };
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
@@ -10,6 +10,7 @@ import { groupAPI, userAPI } from '@/utils/api';
 import { useAlert } from '@/contexts/AlertContext';
 import Button from '@/components/Button';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import NotificationSettings from '@/components/NotificationSettings';
 import styles from '@/styles/Notifications.module.css';
 
 export default function Notifications() {
@@ -25,6 +26,7 @@ export default function Notifications() {
   } = useNotifications();
 
   const { showAlert } = useAlert();
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -85,17 +87,19 @@ export default function Notifications() {
         );
       case 'post_like':
         const postContent = notificationData.postContent;
+        const groupName = notificationData.groupName;
         return (
           <span className={styles.notificationText}>
-            liked your post{postContent ? `: "${postContent}"` : ''}
+            liked your {groupName ? `post in "${groupName}"` : 'post'}{postContent ? `: "${postContent}"` : ''}
           </span>
         );
       case 'post_comment':
         const comment = notificationData.comment;
         const postContentForComment = notificationData.postContent;
+        const groupNameForComment = notificationData.groupName;
         return (
           <span className={styles.notificationText}>
-            commented on your post{postContentForComment ? ` "${postContentForComment}"` : ''}:
+            commented on your {groupNameForComment ? `post in "${groupNameForComment}"` : 'post'}{postContentForComment ? ` "${postContentForComment}"` : ''}:
             {comment ? ` "${comment}"` : ' (comment unavailable)'}
           </span>
         );
@@ -160,11 +164,25 @@ export default function Notifications() {
           </span>
         );
       case 'event_invite':
+        const inviteEventTitle = notificationData.eventTitle || notificationData.eventName || 'Unknown Event';
+        const inviteEventStartTime = notificationData.eventStartTime;
+        const inviteEventLocation = notificationData.eventLocation;
+
         return (
           <>
-            <span className={styles.notificationText}>
-              invited you to the event "{notificationData.eventName || 'Unknown Event'}"
-            </span>
+            <div className={styles.notificationText}>
+              <div>
+                invited you to the event "{inviteEventTitle}"
+              </div>
+              {inviteEventStartTime && (
+                <div className={styles.eventDetails}>
+                  📅 {new Date(inviteEventStartTime).toLocaleDateString()} at {new Date(inviteEventStartTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  {inviteEventLocation && (
+                    <span> • 📍 {inviteEventLocation}</span>
+                  )}
+                </div>
+              )}
+            </div>
             <div className={styles.notificationActions}>
               <Button
                 variant="primary"
@@ -189,6 +207,27 @@ export default function Notifications() {
               </Button>
             </div>
           </>
+        );
+      case 'group_event_created':
+        const eventTitle = notificationData.eventTitle || 'Untitled Event';
+        const eventGroupName = notificationData.groupName;
+        const eventStartTime = notificationData.eventStartTime;
+        const eventLocation = notificationData.eventLocation;
+
+        return (
+          <div className={styles.notificationText}>
+            <div>
+              created a new event "{eventTitle}"{eventGroupName ? ` in "${eventGroupName}"` : ''}
+            </div>
+            {eventStartTime && (
+              <div className={styles.eventDetails}>
+                📅 {new Date(eventStartTime).toLocaleDateString()} at {new Date(eventStartTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                {eventLocation && (
+                  <span> • 📍 {eventLocation}</span>
+                )}
+              </div>
+            )}
+          </div>
         );
       default:
         return (
@@ -331,25 +370,35 @@ export default function Notifications() {
             )}
           </div>
 
-          {notifications && notifications.length > 0 && (
-            <div className={styles.headerActions}>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={markAllAsRead}
-              >
-                Mark all as read
-              </Button>
-              <Button
-                variant="outline"
-                size="small"
-                onClick={deleteAllNotifications}
-                className={styles.deleteAllButton}
-              >
-                Clear all
-              </Button>
-            </div>
-          )}
+          <div className={styles.headerActions}>
+            <Button
+              variant="outline"
+              size="small"
+              onClick={() => setShowSettings(true)}
+              title="Notification Settings"
+            >
+              ⚙️ Settings
+            </Button>
+            {notifications && notifications.length > 0 && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={markAllAsRead}
+                >
+                  Mark all as read
+                </Button>
+                <Button
+                  variant="outline"
+                  size="small"
+                  onClick={deleteAllNotifications}
+                  className={styles.deleteAllButton}
+                >
+                  Clear all
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {isLoading ? (
@@ -424,6 +473,11 @@ export default function Notifications() {
             ))}
           </div>
         )}
+
+        <NotificationSettings
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+        />
       </div>
     </ProtectedRoute>
   );
