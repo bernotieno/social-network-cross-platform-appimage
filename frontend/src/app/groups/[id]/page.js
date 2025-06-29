@@ -290,7 +290,13 @@ export default function GroupPage() {
             {/* Tab Content */}
             <div className={styles.tabContent}>
               {activeTab === 'posts' && (
-                <GroupPosts groupId={group.id} isGroupMember={isGroupMember()} isGroupAdmin={isGroupAdmin()} refreshGroupData={refreshGroupData} />
+                <GroupPosts 
+                  groupId={group.id} 
+                  isGroupMember={isGroupMember()} 
+                  isGroupAdmin={isGroupAdmin()} 
+                  groupCreatorId={group.creatorId}
+                  refreshGroupData={refreshGroupData} 
+                />
               )}
               {activeTab === 'events' && (
                 <GroupEvents

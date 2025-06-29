@@ -12,7 +12,7 @@ import FollowerSelector from '@/components/FollowerSelector';
 import SelectedFollowersTags from '@/components/SelectedFollowersTags';
 import styles from '@/styles/GroupPosts.module.css';
 
-export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
+export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin, groupCreatorId }) {
   const { user } = useAuth();
   const { showSuccess, showError } = useAlert();
   const [posts, setPosts] = useState([]);
@@ -283,6 +283,7 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
               isGroupPost={true}
               groupId={groupId}
               isGroupAdmin={isGroupAdmin}
+              groupCreatorId={groupCreatorId}
             />
             </div>
           ))
