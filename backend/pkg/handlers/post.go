@@ -216,7 +216,7 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			if group.CreatorID == userID {
 				canDelete = true
-			} else {
+			} else if models.UserRole(user.Role) == models.UserRoleAdmin {
 				// If the user is a group admin, they can delete posts unless the post is by the group creator
 				groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(group.ID, userID)
 				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin && post.UserID != group.CreatorID {
