@@ -17,6 +17,25 @@ const (
 	GroupPrivacyPrivate GroupPrivacy = "private"
 )
 
+// GroupMemberRole represents the role of a user within a group
+type GroupMemberRole string
+
+const (
+	GroupMemberRoleCreator GroupMemberRole = "creator"
+	GroupMemberRoleAdmin   GroupMemberRole = "admin"
+	GroupMemberRoleMember  GroupMemberRole = "member"
+)
+
+// GroupMemberStatus represents the status of a user's membership in a group
+type GroupMemberStatus string
+
+const (
+	GroupMemberStatusPending  GroupMemberStatus = "pending"
+	GroupMemberStatusAccepted GroupMemberStatus = "accepted"
+	GroupMemberStatusRejected GroupMemberStatus = "rejected"
+	GroupMemberStatusInvited  GroupMemberStatus = "invited"
+)
+
 // Group represents a group
 type Group struct {
 	ID          string       `json:"id"`
@@ -60,7 +79,7 @@ func (s *GroupService) Create(group *Group) error {
 		return fmt.Errorf("failed to create group: %w", err)
 	}
 
-	// Add the creator as a member with 'creator' role
+	// Add the creator as a member with 'creator' role and 'accepted' status
 	_, err = s.DB.Exec(`
 		INSERT INTO group_members (id, group_id, user_id, role, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -83,7 +102,7 @@ func (s *GroupService) GetByID(id string, currentUserID string) (*Group, error) 
 			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
 			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
 			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status,
-			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND role = 'admin') > 0 as is_admin
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND (role = 'admin' OR role = 'creator')) > 0 as is_admin
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		WHERE g.id = ?
