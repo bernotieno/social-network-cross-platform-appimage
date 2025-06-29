@@ -50,29 +50,53 @@ export default function Notifications() {
 
     switch (notification.type) {
       case 'follow_request':
-        return (
-          <>
-            <span className={styles.notificationText}>
-              requested to follow you
-            </span>
-            <div className={styles.notificationActions}>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={() => handleFollowResponse(notification, true)}
-              >
-                Accept
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => handleFollowResponse(notification, false)}
-              >
-                Decline
-              </Button>
-            </div>
-          </>
-        );
+        if (notification.status === 'accepted') {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                requested to follow you
+              </span>
+              <div className={styles.notificationStatus}>
+                <span className={styles.statusAccepted}>Accepted</span>
+              </div>
+            </>
+          );
+        } else if (notification.status === 'declined') {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                requested to follow you
+              </span>
+              <div className={styles.notificationStatus}>
+                <span className={styles.statusDeclined}>Declined</span>
+              </div>
+            </>
+          );
+        } else {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                requested to follow you
+              </span>
+              <div className={styles.notificationActions}>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={() => handleFollowResponse(notification, true)}
+                >
+                  Accept
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => handleFollowResponse(notification, false)}
+                >
+                  Decline
+                </Button>
+              </div>
+            </>
+          );
+        }
       case 'follow_accepted':
         return (
           <span className={styles.notificationText}>
@@ -104,53 +128,101 @@ export default function Notifications() {
           </span>
         );
       case 'group_invite':
-        return (
-          <>
-            <span className={styles.notificationText}>
-              invited you to join the group "{notificationData.groupName || 'Unknown Group'}"
-            </span>
-            <div className={styles.notificationActions}>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={() => handleGroupInviteResponse(notification.id, true)}
-              >
-                Join
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => handleGroupInviteResponse(notification.id, false)}
-              >
-                Decline
-              </Button>
-            </div>
-          </>
-        );
+        if (notification.status === 'accepted') {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                invited you to join the group "{notificationData.groupName || 'Unknown Group'}"
+              </span>
+              <div className={styles.notificationStatus}>
+                <span className={styles.statusAccepted}>Accepted</span>
+              </div>
+            </>
+          );
+        } else if (notification.status === 'declined') {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                invited you to join the group "{notificationData.groupName || 'Unknown Group'}"
+              </span>
+              <div className={styles.notificationStatus}>
+                <span className={styles.statusDeclined}>Declined</span>
+              </div>
+            </>
+          );
+        } else {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                invited you to join the group "{notificationData.groupName || 'Unknown Group'}"
+              </span>
+              <div className={styles.notificationActions}>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={() => handleGroupInviteResponse(notification.id, true)}
+                >
+                  Join
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => handleGroupInviteResponse(notification.id, false)}
+                >
+                  Decline
+                </Button>
+              </div>
+            </>
+          );
+        }
       case 'group_join_request':
-        return (
-          <>
-            <span className={styles.notificationText}>
-              requested to join your group "{notificationData.groupName || 'Unknown Group'}"
-            </span>
-            <div className={styles.notificationActions}>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={() => handleGroupJoinResponse(notification.id, true)}
-              >
-                Accept
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => handleGroupJoinResponse(notification.id, false)}
-              >
-                Decline
-              </Button>
-            </div>
-          </>
-        );
+        if (notification.status === 'approved') {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                requested to join your group "{notificationData.groupName || 'Unknown Group'}"
+              </span>
+              <div className={styles.notificationStatus}>
+                <span className={styles.statusAccepted}>Approved</span>
+              </div>
+            </>
+          );
+        } else if (notification.status === 'rejected') {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                requested to join your group "{notificationData.groupName || 'Unknown Group'}"
+              </span>
+              <div className={styles.notificationStatus}>
+                <span className={styles.statusDeclined}>Rejected</span>
+              </div>
+            </>
+          );
+        } else {
+          return (
+            <>
+              <span className={styles.notificationText}>
+                requested to join your group "{notificationData.groupName || 'Unknown Group'}"
+              </span>
+              <div className={styles.notificationActions}>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={() => handleGroupJoinResponse(notification.id, true)}
+                >
+                  Accept
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => handleGroupJoinResponse(notification.id, false)}
+                >
+                  Decline
+                </Button>
+              </div>
+            </>
+          );
+        }
       case 'group_join_approved':
         return (
           <span className={styles.notificationText}>
