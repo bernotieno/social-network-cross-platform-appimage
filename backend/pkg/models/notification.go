@@ -13,6 +13,9 @@ import (
 // NotificationType represents the type of notification
 type NotificationType string
 
+// NotificationStatus represents the status of a notification response
+type NotificationStatus string
+
 const (
 	NotificationTypeFollowRequest     NotificationType = "follow_request"
 	NotificationTypeFollowAccepted    NotificationType = "follow_accepted"
@@ -27,16 +30,25 @@ const (
 	NotificationTypeGroupEventCreated NotificationType = "group_event_created"
 )
 
+const (
+	NotificationStatusPending  NotificationStatus = "pending"
+	NotificationStatusAccepted NotificationStatus = "accepted"
+	NotificationStatusDeclined NotificationStatus = "declined"
+	NotificationStatusApproved NotificationStatus = "approved"
+	NotificationStatusRejected NotificationStatus = "rejected"
+)
+
 // Notification represents a notification
 type Notification struct {
-	ID        string           `json:"id"`
-	UserID    string           `json:"userId"`
-	SenderID  string           `json:"senderId"`
-	Type      NotificationType `json:"type"`
-	Content   string           `json:"content"`
-	Data      string           `json:"data,omitempty"`
-	ReadAt    *time.Time       `json:"readAt,omitempty"`
-	CreatedAt time.Time        `json:"createdAt"`
+	ID        string             `json:"id"`
+	UserID    string             `json:"userId"`
+	SenderID  string             `json:"senderId"`
+	Type      NotificationType   `json:"type"`
+	Content   string             `json:"content"`
+	Data      string             `json:"data,omitempty"`
+	Status    NotificationStatus `json:"status,omitempty"`
+	ReadAt    *time.Time         `json:"readAt,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
 	// Additional fields for API responses
 	Sender *User `json:"sender,omitempty"`
 }
@@ -68,10 +80,15 @@ func (s *NotificationService) Create(notification *Notification) error {
 	notification.ID = uuid.New().String()
 	notification.CreatedAt = time.Now()
 
+	// Set default status if not provided
+	if notification.Status == "" {
+		notification.Status = NotificationStatusPending
+	}
+
 	_, err := s.DB.Exec(`
-		INSERT INTO notifications (id, user_id, sender_id, type, content, data, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, notification.ID, notification.UserID, notification.SenderID, notification.Type, notification.Content, notification.Data, notification.CreatedAt)
+		INSERT INTO notifications (id, user_id, sender_id, type, content, data, status, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, notification.ID, notification.UserID, notification.SenderID, notification.Type, notification.Content, notification.Data, notification.Status, notification.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create notification: %w", err)
 	}
@@ -138,13 +155,13 @@ func (s *NotificationService) GetByID(id string) (*Notification, error) {
 	var readAt sql.NullTime
 
 	err := s.DB.QueryRow(`
-		SELECT n.id, n.user_id, n.sender_id, n.type, n.content, n.data, n.read_at, n.created_at,
+		SELECT n.id, n.user_id, n.sender_id, n.type, n.content, n.data, n.status, n.read_at, n.created_at,
 			u.id, u.username, u.full_name, u.profile_picture
 		FROM notifications n
 		JOIN users u ON n.sender_id = u.id
 		WHERE n.id = ?
 	`, id).Scan(
-		&notification.ID, &notification.UserID, &notification.SenderID, &notification.Type, &notification.Content, &notification.Data, &readAt, &notification.CreatedAt,
+		&notification.ID, &notification.UserID, &notification.SenderID, &notification.Type, &notification.Content, &notification.Data, &notification.Status, &readAt, &notification.CreatedAt,
 		&notification.Sender.ID, &notification.Sender.Username, &notification.Sender.FullName, &notification.Sender.ProfilePicture,
 	)
 	if err != nil {
@@ -164,7 +181,7 @@ func (s *NotificationService) GetByID(id string) (*Notification, error) {
 // GetByUser retrieves notifications for a user
 func (s *NotificationService) GetByUser(userID string, limit, offset int) ([]*Notification, error) {
 	rows, err := s.DB.Query(`
-		SELECT n.id, n.user_id, n.sender_id, n.type, n.content, n.data, n.read_at, n.created_at,
+		SELECT n.id, n.user_id, n.sender_id, n.type, n.content, n.data, n.status, n.read_at, n.created_at,
 			u.id, u.username, u.full_name, u.profile_picture
 		FROM notifications n
 		JOIN users u ON n.sender_id = u.id
@@ -183,7 +200,7 @@ func (s *NotificationService) GetByUser(userID string, limit, offset int) ([]*No
 		var readAt sql.NullTime
 
 		err := rows.Scan(
-			&notification.ID, &notification.UserID, &notification.SenderID, &notification.Type, &notification.Content, &notification.Data, &readAt, &notification.CreatedAt,
+			&notification.ID, &notification.UserID, &notification.SenderID, &notification.Type, &notification.Content, &notification.Data, &notification.Status, &readAt, &notification.CreatedAt,
 			&notification.Sender.ID, &notification.Sender.Username, &notification.Sender.FullName, &notification.Sender.ProfilePicture,
 		)
 		if err != nil {
@@ -277,6 +294,24 @@ func (s *NotificationService) Delete(id, userID string) error {
 	return nil
 }
 
+// DeleteByTypeAndSender deletes notifications by type, user, and sender
+func (s *NotificationService) DeleteByTypeAndSender(userID, senderID string, notificationType NotificationType) error {
+	_, err := s.DB.Exec("DELETE FROM notifications WHERE user_id = ? AND sender_id = ? AND type = ?", userID, senderID, notificationType)
+	if err != nil {
+		return fmt.Errorf("failed to delete notifications by type and sender: %w", err)
+	}
+	return nil
+}
+
+// DeleteByTypeAndData deletes notifications by type, user, and data content
+func (s *NotificationService) DeleteByTypeAndData(userID string, notificationType NotificationType, dataContains string) error {
+	_, err := s.DB.Exec("DELETE FROM notifications WHERE user_id = ? AND type = ? AND data LIKE ?", userID, notificationType, "%"+dataContains+"%")
+	if err != nil {
+		return fmt.Errorf("failed to delete notifications by type and data: %w", err)
+	}
+	return nil
+}
+
 // DeleteAll deletes all notifications for a user
 func (s *NotificationService) DeleteAll(userID string) error {
 	_, err := s.DB.Exec("DELETE FROM notifications WHERE user_id = ?", userID)
@@ -284,6 +319,37 @@ func (s *NotificationService) DeleteAll(userID string) error {
 		return fmt.Errorf("failed to delete all notifications: %w", err)
 	}
 
+	return nil
+}
+
+// UpdateStatus updates the status of a notification
+func (s *NotificationService) UpdateStatus(id, userID string, status NotificationStatus) error {
+	// Check if notification belongs to user
+	var count int
+	err := s.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE id = ? AND user_id = ?", id, userID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check notification ownership: %w", err)
+	}
+
+	if count == 0 {
+		return errors.New("notification not found or not authorized")
+	}
+
+	// Update the notification status
+	_, err = s.DB.Exec("UPDATE notifications SET status = ? WHERE id = ?", status, id)
+	if err != nil {
+		return fmt.Errorf("failed to update notification status: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateStatusByTypeAndSender updates the status of notifications by type and sender
+func (s *NotificationService) UpdateStatusByTypeAndSender(userID, senderID string, notificationType NotificationType, status NotificationStatus) error {
+	_, err := s.DB.Exec("UPDATE notifications SET status = ? WHERE user_id = ? AND sender_id = ? AND type = ?", status, userID, senderID, notificationType)
+	if err != nil {
+		return fmt.Errorf("failed to update notification status by type and sender: %w", err)
+	}
 	return nil
 }
 
