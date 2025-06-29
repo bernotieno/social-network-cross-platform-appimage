@@ -10,23 +10,7 @@ import (
 )
 
 // GroupMemberRole represents the role of a group member
-type GroupMemberRole string
 
-const (
-	GroupMemberRoleAdmin  GroupMemberRole = "admin"
-	GroupMemberRoleMember GroupMemberRole = "member"
-	GroupMemberRoleCreator GroupMemberRole = "creator"
-)
-
-// GroupMemberStatus represents the status of a group membership
-type GroupMemberStatus string
-
-const (
-	GroupMemberStatusPending  GroupMemberStatus = "pending"
-	GroupMemberStatusAccepted GroupMemberStatus = "accepted"
-	GroupMemberStatusRejected GroupMemberStatus = "rejected"
-	GroupMemberStatusInvited  GroupMemberStatus = "invited"
-)
 
 // GroupMember represents a member of a group
 type GroupMember struct {
