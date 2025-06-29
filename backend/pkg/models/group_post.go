@@ -211,7 +211,6 @@ func (s *GroupPostService) Delete(id, userID string) error {
 	return errors.New("not authorized to delete this post")
 }
 
-
 // GetByGroup retrieves posts for a group
 func (s *GroupPostService) GetByGroup(groupID, currentUserID string, limit, offset int) ([]*GroupPost, error) {
 	// Check if the current user can view posts in this group

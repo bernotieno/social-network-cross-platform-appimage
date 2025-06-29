@@ -14,8 +14,8 @@ import (
 type UserRole string
 
 const (
-	UserRoleAdmin    UserRole = "admin"
-	UserRoleMember   UserRole = "member"
+	UserRoleAdmin     UserRole = "admin"
+	UserRoleMember    UserRole = "member"
 	UserRoleModerator UserRole = "moderator"
 )
 

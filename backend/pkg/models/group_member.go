@@ -11,7 +11,6 @@ import (
 
 // GroupMemberRole represents the role of a group member
 
-
 // GroupMember represents a member of a group
 type GroupMember struct {
 	ID        string            `json:"id"`

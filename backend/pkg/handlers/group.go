@@ -158,8 +158,6 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
-
 	// Get user for response
 	user, err := h.UserService.GetByID(userID)
 	if err != nil {
@@ -2100,9 +2098,9 @@ func (h *Handler) DeleteGroupPost(w http.ResponseWriter, r *http.Request) {
 	if err := h.GroupPostService.Delete(postID, userID); err != nil {
 		if err.Error() == "group post not found" {
 			utils.RespondWithError(w, http.StatusNotFound, "Post not found")
-		} else if err.Error() == "not authorized to delete this post" || 
-				  err.Error() == "admin cannot delete the group creator's post" ||
-				  err.Error() == "user is not an active member of this group" {
+		} else if err.Error() == "not authorized to delete this post" ||
+			err.Error() == "admin cannot delete the group creator's post" ||
+			err.Error() == "user is not an active member of this group" {
 			utils.RespondWithError(w, http.StatusForbidden, err.Error())
 		} else {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete post")

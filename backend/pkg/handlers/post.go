@@ -199,7 +199,7 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	// - Regular member can delete only their own posts
 
 	canDelete := false
-	
+
 	// User can delete their own post
 	if post.UserID == userID {
 		canDelete = true
@@ -312,8 +312,6 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 		"post": post,
 	})
 }
-
-
 
 // GetUserPosts handles retrieving posts by a user
 func (h *Handler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
