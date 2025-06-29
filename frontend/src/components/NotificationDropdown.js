@@ -156,89 +156,125 @@ const NotificationDropdown = ({
   const getNotificationContent = (notification) => {
     switch (notification.type) {
       case 'follow_request':
-        return {
-          text: 'requested to follow you',
-          actions: (
-            <div className={styles.quickActions}>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleFollowResponse(notification, true);
-                }}
-              >
-                Accept
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleFollowResponse(notification, false);
-                }}
-              >
-                Decline
-              </Button>
-            </div>
-          )
-        };
+        if (notification.status === 'accepted') {
+          return {
+            text: 'requested to follow you',
+            actions: <span className={styles.statusText}>Accepted</span>
+          };
+        } else if (notification.status === 'declined') {
+          return {
+            text: 'requested to follow you',
+            actions: <span className={styles.statusText}>Declined</span>
+          };
+        } else {
+          return {
+            text: 'requested to follow you',
+            actions: (
+              <div className={styles.quickActions}>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFollowResponse(notification, true);
+                  }}
+                >
+                  Accept
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFollowResponse(notification, false);
+                  }}
+                >
+                  Decline
+                </Button>
+              </div>
+            )
+          };
+        }
       case 'group_invite':
-        return {
-          text: 'invited you to join a group',
-          actions: (
-            <div className={styles.quickActions}>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleGroupInviteResponse(notification, true);
-                }}
-              >
-                Accept
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleGroupInviteResponse(notification, false);
-                }}
-              >
-                Decline
-              </Button>
-            </div>
-          )
-        };
+        if (notification.status === 'accepted') {
+          return {
+            text: 'invited you to join a group',
+            actions: <span className={styles.statusText}>Accepted</span>
+          };
+        } else if (notification.status === 'declined') {
+          return {
+            text: 'invited you to join a group',
+            actions: <span className={styles.statusText}>Declined</span>
+          };
+        } else {
+          return {
+            text: 'invited you to join a group',
+            actions: (
+              <div className={styles.quickActions}>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGroupInviteResponse(notification, true);
+                  }}
+                >
+                  Accept
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGroupInviteResponse(notification, false);
+                  }}
+                >
+                  Decline
+                </Button>
+              </div>
+            )
+          };
+        }
       case 'group_join_request':
-        return {
-          text: 'requested to join your group',
-          actions: (
-            <div className={styles.quickActions}>
-              <Button
-                variant="primary"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleGroupJoinResponse(notification, true);
-                }}
-              >
-                Approve
-              </Button>
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleGroupJoinResponse(notification, false);
-                }}
-              >
-                Reject
-              </Button>
-            </div>
-          )
-        };
+        if (notification.status === 'approved') {
+          return {
+            text: 'requested to join your group',
+            actions: <span className={styles.statusText}>Approved</span>
+          };
+        } else if (notification.status === 'rejected') {
+          return {
+            text: 'requested to join your group',
+            actions: <span className={styles.statusText}>Rejected</span>
+          };
+        } else {
+          return {
+            text: 'requested to join your group',
+            actions: (
+              <div className={styles.quickActions}>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGroupJoinResponse(notification, true);
+                  }}
+                >
+                  Approve
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGroupJoinResponse(notification, false);
+                  }}
+                >
+                  Reject
+                </Button>
+              </div>
+            )
+          };
+        }
       case 'follow_accepted':
         return { text: 'accepted your follow request' };
       case 'new_follower':
