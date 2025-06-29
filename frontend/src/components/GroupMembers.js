@@ -201,7 +201,14 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
   };
 
   const handleRemoveMember = async (userId, userName) => {
-    if (!window.confirm(`Are you sure you want to remove ${userName} from this group? This action cannot be undone.`)) {
+    const confirmed = await showConfirm({
+      title: 'Remove Member',
+      message: `Are you sure you want to remove ${userName} from this group? This action cannot be undone.`,
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      confirmVariant: 'primary'  // Using primary color for non-destructive action
+    });
+    if (!confirmed)  {
       return;
     }
 
