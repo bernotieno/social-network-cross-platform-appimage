@@ -276,13 +276,14 @@ export default function GroupPosts({ groupId, isGroupMember, isGroupAdmin }) {
           posts.map(post => (
             <div key={post.id} className={styles.postWrapper}>
               <Post
-                post={post}
-                onUpdate={handlePostUpdate}
-                onDelete={handlePostDelete}
-                isGroupPost={true}
-                groupId={groupId}
-                isGroupAdmin={isGroupAdmin}
-              />
+              key={post.id}
+              post={post}
+              onUpdate={handlePostUpdate}
+              onDelete={handlePostDelete}
+              isGroupPost={true}
+              groupId={groupId}
+              isGroupAdmin={isGroupAdmin}
+            />
             </div>
           ))
         )}
