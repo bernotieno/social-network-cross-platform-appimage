@@ -1158,6 +1158,12 @@ func (h *Handler) ApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update the original group join request notification status for the current user (admin)
+	if err := h.NotificationService.UpdateStatusByTypeAndSender(currentUserID, req.UserID, models.NotificationTypeGroupJoinRequest, models.NotificationStatusApproved); err != nil {
+		// Log error but don't fail the request
+		// TODO: Add proper logging
+	}
+
 	// Get group information for notification
 	group, err := h.GroupService.GetByID(groupID, currentUserID)
 	if err != nil {
@@ -1230,6 +1236,12 @@ func (h *Handler) RejectJoinRequest(w http.ResponseWriter, r *http.Request) {
 	if err := h.GroupMemberService.UpdateStatus(member.ID, models.GroupMemberStatusRejected); err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to reject request")
 		return
+	}
+
+	// Update the original group join request notification status for the current user (admin)
+	if err := h.NotificationService.UpdateStatusByTypeAndSender(currentUserID, req.UserID, models.NotificationTypeGroupJoinRequest, models.NotificationStatusRejected); err != nil {
+		// Log error but don't fail the request
+		// TODO: Add proper logging
 	}
 
 	// Get group information for notification
@@ -1412,8 +1424,15 @@ func (h *Handler) RespondToGroupInvitation(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Mark the notification as read
-	if err := h.NotificationService.MarkAsRead(notificationID, userID); err != nil {
+	// Update the group invitation notification status
+	var notificationStatus models.NotificationStatus
+	if req.Accept {
+		notificationStatus = models.NotificationStatusAccepted
+	} else {
+		notificationStatus = models.NotificationStatusDeclined
+	}
+
+	if err := h.NotificationService.UpdateStatus(notificationID, userID, notificationStatus); err != nil {
 		// Log error but don't fail the request
 		// TODO: Add proper logging
 	}
