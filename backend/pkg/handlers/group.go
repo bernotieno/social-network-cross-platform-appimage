@@ -2074,29 +2074,17 @@ func (h *Handler) DeleteGroupPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the post to check ownership
-	post, err := h.PostService.GetByID(postID, userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
-		return
-	}
-
-	// Check if user is the post author or a group admin
-	isAuthor := post.UserID == userID
-	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
-		return
-	}
-
-	if !isAuthor && !isAdmin {
-		utils.RespondWithError(w, http.StatusForbidden, "Only post author or group admin can delete this post")
-		return
-	}
-
-	// Delete the post
-	if err := h.PostService.Delete(postID, userID); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete post")
+	// Delete the group post using GroupPostService which has proper permission logic
+	if err := h.GroupPostService.Delete(postID, userID); err != nil {
+		if err.Error() == "group post not found" {
+			utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		} else if err.Error() == "not authorized to delete this post" || 
+				  err.Error() == "admin cannot delete the group creator's post" ||
+				  err.Error() == "user is not an active member of this group" {
+			utils.RespondWithError(w, http.StatusForbidden, err.Error())
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete post")
+		}
 		return
 	}
 
