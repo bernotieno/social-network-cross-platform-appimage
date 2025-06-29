@@ -193,26 +193,15 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user from database to check role
-	user, err := h.UserService.GetByID(userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get user information")
-		return
-	}
-
 	// Check authorization based on requirements:
 	// - Group creator can delete anyone's post in their group
 	// - Group admin can delete member posts only (not creator posts)
 	// - Regular member can delete only their own posts
-	// - System moderators can delete any post
 
 	canDelete := false
 	
-	// System moderator can delete any post
-	if models.UserRole(user.Role) == models.UserRoleModerator {
-		canDelete = true
-	} else if post.UserID == userID {
-		// User can delete their own post
+	// User can delete their own post
+	if post.UserID == userID {
 		canDelete = true
 	} else if post.GroupID.Valid && post.GroupID.String != "" {
 		// For group posts, check group-specific permissions
