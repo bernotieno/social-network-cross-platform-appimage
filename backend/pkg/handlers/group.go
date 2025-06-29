@@ -941,16 +941,16 @@ func (h *Handler) UpdateGroupEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user is the creator or a group admin
-	isCreator := existingEvent.CreatorID == userID
+	// Check if user is a group admin (includes group creator)
+	// Only group admins can update events, regardless of who created them
 	isAdmin, err := h.GroupMemberService.IsGroupAdmin(existingEvent.GroupID, userID)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
 		return
 	}
 
-	if !isCreator && !isAdmin {
-		utils.RespondWithError(w, http.StatusForbidden, "Only event creator or group admin can update this event")
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can update events")
 		return
 	}
 
@@ -1011,16 +1011,38 @@ func (h *Handler) DeleteGroupEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user is the creator or a group admin
-	isCreator := existingEvent.CreatorID == userID
-	isAdmin, err := h.GroupMemberService.IsGroupAdmin(existingEvent.GroupID, userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
-		return
+	// Check authorization based on requirements:
+	// - Group creator can delete anyone's event in their group
+	// - Group admin can delete member events only (not creator events)
+	// - Regular member can delete only their own events
+
+	canDelete := false
+
+	// User can delete their own event
+	if existingEvent.CreatorID == userID {
+		canDelete = true
+	} else {
+		// For events created by others, check group permissions
+		group, err := h.GroupService.GetByID(existingEvent.GroupID, userID)
+		if err == nil {
+			if group.CreatorID == userID {
+				// Group creator can delete any event in their group
+				canDelete = true
+			} else {
+				// Check if user is a group admin
+				groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(group.ID, userID)
+				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin {
+					// Group admin can delete member events only, not creator events
+					if existingEvent.CreatorID != group.CreatorID {
+						canDelete = true
+					}
+				}
+			}
+		}
 	}
 
-	if !isCreator && !isAdmin {
-		utils.RespondWithError(w, http.StatusForbidden, "Only event creator or group admin can delete this event")
+	if !canDelete {
+		utils.RespondWithError(w, http.StatusForbidden, "Forbidden: You are not authorized to delete this event")
 		return
 	}
 
