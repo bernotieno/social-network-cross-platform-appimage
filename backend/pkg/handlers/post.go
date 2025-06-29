@@ -173,6 +173,73 @@ func (h *Handler) GetPost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// DeletePost handles deleting a post
+func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, err := middleware.GetUserID(r)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Get post ID from URL
+	vars := mux.Vars(r)
+	postID := vars["id"]
+
+	// Get post from database
+	post, err := h.PostService.GetByID(postID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
+		return
+	}
+
+	// Get user from database to check role
+	user, err := h.UserService.GetByID(userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get user information")
+		return
+	}
+
+	// Check authorization
+	// Admin can delete any post
+	// Post owner can delete their own post
+	// Group creator can delete posts within their group
+
+	canDelete := false
+	if models.UserRole(user.Role) == models.UserRoleAdmin {
+		canDelete = true
+	} else if post.UserID == userID {
+		canDelete = true
+	} else if post.GroupID.Valid && post.GroupID.String != "" {
+		// Check if the user is the group creator for group posts
+		group, err := h.GroupService.GetByID(post.GroupID.String, userID)
+		if err == nil {
+			if group.CreatorID == userID {
+				canDelete = true
+			} else {
+				// If the user is a group admin, they can delete posts unless the post is by the group creator
+				groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(group.ID, userID)
+				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin && post.UserID != group.CreatorID {
+					canDelete = true
+				}
+			}
+		}
+	}
+
+	if !canDelete {
+		utils.RespondWithError(w, http.StatusForbidden, "Forbidden: You are not authorized to delete this post")
+		return
+	}
+
+	// Delete the post
+	if err := h.PostService.Delete(postID, userID); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete post")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, "Post deleted successfully", nil)
+}
+
 // UpdatePost handles updating a post
 func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
@@ -249,45 +316,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeletePost handles deleting a post
-func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context
-	userID, err := middleware.GetUserID(r)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
 
-	// Get post ID from URL
-	vars := mux.Vars(r)
-	postID := vars["id"]
-
-	// Get post to check ownership and get image path
-	post, err := h.PostService.GetByID(postID, userID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusNotFound, "Post not found")
-		return
-	}
-
-	// Check if user is the post owner
-	if post.UserID != userID {
-		utils.RespondWithError(w, http.StatusForbidden, "Not authorized to delete this post")
-		return
-	}
-
-	// Delete post
-	if err := h.PostService.Delete(postID, userID); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to delete post")
-		return
-	}
-
-	// Delete post image if exists
-	if post.Image != "" {
-		utils.DeleteImage(post.Image)
-	}
-
-	utils.RespondWithSuccess(w, http.StatusOK, "Post deleted successfully", nil)
-}
 
 // GetUserPosts handles retrieving posts by a user
 func (h *Handler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
