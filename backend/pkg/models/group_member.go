@@ -15,6 +15,7 @@ type GroupMemberRole string
 const (
 	GroupMemberRoleAdmin  GroupMemberRole = "admin"
 	GroupMemberRoleMember GroupMemberRole = "member"
+	GroupMemberRoleCreator GroupMemberRole = "creator"
 )
 
 // GroupMemberStatus represents the status of a group membership
@@ -158,6 +159,11 @@ func (s *GroupMemberService) PromoteToAdmin(groupID, memberID, callerID string) 
 	// Only the group creator can promote members
 	if creatorID != callerID {
 		return errors.New("only the group creator can promote members")
+	}
+
+	// Prevent promoting the group creator
+	if memberID == creatorID {
+		return errors.New("cannot promote the group creator")
 	}
 
 	// Update the member's role to admin
