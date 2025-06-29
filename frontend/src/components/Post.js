@@ -51,15 +51,14 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
    * @description This variable is true if the logged-in user's ID matches the post's author ID.
    * @type {boolean}
    */
-  const isOwnPost = user && user.id === post.author_id;
+  const isOwnPost = user && user.id === post.userId;
   const canDeletePost = () => {
     if (!user || !post) return false;
     
-    // System moderator can delete any post
-    if (user.role === 'moderator') return true;
+    // No system-level admin permissions for post deletion
     
     // User can delete their own post
-    if (user.id === post.author_id) return true;
+    if (user.id === post.userId) return true;
 
     // For group posts, check group-specific permissions
     if (isGroupPost && groupId) {
@@ -73,7 +72,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
       
       // Group admin can delete member posts only, not creator posts
       // Make sure the current user is NOT the group creator and the post author is NOT the group creator
-      if (isGroupAdmin && user.id !== groupCreatorId && post.author_id !== groupCreatorId) {
+      if (isGroupAdmin && user.id !== groupCreatorId && post.userId !== groupCreatorId) {
         return true;
       }
     }
@@ -714,7 +713,7 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
                           {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                         </span>
 
-                        {(user?.id === comment.author.id || isOwnPost || user?.role === 'moderator' || (isGroupPost && groupCreatorId && user?.id === groupCreatorId) || (isGroupPost && isGroupAdmin && user?.id !== groupCreatorId && comment.author.id !== groupCreatorId)) && (
+                        {(user?.id === comment.author.id || isOwnPost || (isGroupPost && groupCreatorId && user?.id === groupCreatorId) || (isGroupPost && isGroupAdmin && user?.id !== groupCreatorId && comment.author.id !== groupCreatorId)) && (
                           <button
                             className={styles.deleteCommentButton}
                             onClick={() => handleDeleteComment(comment.id)}
