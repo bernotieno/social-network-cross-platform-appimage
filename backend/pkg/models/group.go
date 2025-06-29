@@ -60,6 +60,15 @@ func (s *GroupService) Create(group *Group) error {
 		return fmt.Errorf("failed to create group: %w", err)
 	}
 
+	// Add the creator as a member with 'creator' role
+	_, err = s.DB.Exec(`
+		INSERT INTO group_members (id, group_id, user_id, role, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, uuid.New().String(), group.ID, group.CreatorID, GroupMemberRoleCreator, GroupMemberStatusAccepted, now, now)
+	if err != nil {
+		return fmt.Errorf("failed to add group creator as member: %w", err)
+	}
+
 	return nil
 }
 
