@@ -874,17 +874,32 @@ func (h *Handler) RespondToFollowRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Create notification for the follower
-	notification := &models.Notification{
-		UserID:   follow.FollowerID,
-		SenderID: userID,
-		Type:     models.NotificationTypeFollowAccepted,
-		Content:  "accepted your follow request",
+	// Update the original follow request notification status
+	var notificationStatus models.NotificationStatus
+	if req.Accept {
+		notificationStatus = models.NotificationStatusAccepted
+	} else {
+		notificationStatus = models.NotificationStatusDeclined
 	}
 
-	if err := h.NotificationService.Create(notification); err != nil {
+	if err := h.NotificationService.UpdateStatusByTypeAndSender(userID, follow.FollowerID, models.NotificationTypeFollowRequest, notificationStatus); err != nil {
 		// Log error but don't fail the request
 		// TODO: Add proper logging
+	}
+
+	// Create notification for the follower if accepted
+	if req.Accept {
+		notification := &models.Notification{
+			UserID:   follow.FollowerID,
+			SenderID: userID,
+			Type:     models.NotificationTypeFollowAccepted,
+			Content:  "accepted your follow request",
+		}
+
+		if err := h.NotificationService.Create(notification); err != nil {
+			// Log error but don't fail the request
+			// TODO: Add proper logging
+		}
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, "Follow request updated successfully", nil)
