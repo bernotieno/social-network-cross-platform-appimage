@@ -332,6 +332,9 @@ export default function GroupMembers({ groupId, isGroupAdmin, isGroupMember, onM
                     {member.role === 'admin' && (
                       <span className={styles.adminBadge}>Admin</span>
                     )}
+                    {member.role === 'creator' && (
+                      <span className={styles.adminBadge}>Owner</span>
+                    )}
                     {isGroupAdmin && memberUser.id !== user?.id && (
                       <div className={styles.memberActions}>
                         {member.role === 'member' ? (
