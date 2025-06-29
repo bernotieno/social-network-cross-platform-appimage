@@ -16,6 +16,31 @@ import styles from '@/styles/Post.module.css';
 const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, isGroupAdmin = false, priority = false }) => {
   const { user } = useAuth();
   const { showSuccess } = useAlert();
+  const [groupCreatorId, setGroupCreatorId] = useState(null);
+
+  useEffect(() => {
+    if (isGroupPost && groupId && post.group_id) {
+      /**
+       * @summary Fetches the creator ID of a group post.
+       * @description This function makes an API call to get group details and sets the group creator's ID in the component's state.
+       * It handles potential errors during the API call or if the group data is missing from the response.
+       * @returns {void}
+       */
+      const fetchGroupCreator = async () => {
+        try {
+          const response = await groupAPI.getGroup(post.group_id);
+          if (response.error || !response.data || !response.data.group) {
+            console.error("Error fetching group creator or group data is missing:", response.error || "Missing data");
+            return;
+          }
+          setGroupCreatorId(response.data.group.creator_id);
+        } catch (error) {
+          console.error("Error fetching group creator:", error);
+        }
+      };
+      fetchGroupCreator();
+    }
+  }, [isGroupPost, groupId, post.group_id]);
 
   // Early return if post is not properly loaded
   if (!post || !post.id) {
@@ -41,8 +66,29 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
   const [alertConfig, setAlertConfig] = useState({ type: 'info', message: '', title: 'Alert' });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isOwnPost = user?.id === post.author.id;
-  const canDeletePost = isOwnPost || (isGroupPost && isGroupAdmin);
+  /**
+   * @summary Determines if the current user can delete the post.
+   * @description A user can delete a post if:
+   * - They are the author of the post (`isOwnPost`).
+   * - It's a group post and the user is a group admin, but not the group creator.
+   * - It's a group post and the user is the group creator (can delete any post in their group).
+   * @summary Determines if the current user is the author of the post.
+   * @description This variable is true if the logged-in user's ID matches the post's author ID.
+   * @type {boolean}
+   */
+  const isOwnPost = user && user.id === post.author_id;
+  const canDeletePost = () => {
+    if (!user || !post) return false;
+    // User can delete their own post
+    if (user.id === post.author_id) return true;
+
+    // For group posts, group creator or admin can delete posts by others
+    if (isGroupPost && groupId && isGroupAdmin) {
+      return true;
+    }
+
+    return false;
+  };
   const canEditPost = isOwnPost; // Only post author can edit
 
   const handleLikeToggle = async () => {
@@ -208,6 +254,11 @@ const Post = ({ post, onDelete, onUpdate, isGroupPost = false, groupId = null, i
     setShowDeleteConfirm(true); // Show custom confirmation modal
   };
 
+  /**
+   * @summary Handles the deletion of a post.
+   * @description This function sets the `isDeleting` state to true, calls the appropriate API to delete the post (either `postAPI.deletePost` for regular posts or `groupAPI.deleteGroupPost` for group posts), and then calls the `onDelete` callback if the deletion is successful. It also handles error logging.
+   * @returns {void}
+   */
   const confirmDeletePost = async () => {
     try {
       setIsDeleting(true);
