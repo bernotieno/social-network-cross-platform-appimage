@@ -31,6 +31,7 @@ type Group struct {
 	Creator       *User  `json:"creator,omitempty"`
 	MembersCount  int    `json:"membersCount,omitempty"`
 	IsJoined      bool   `json:"isJoined"`
+	IsAdmin       bool   `json:"isAdmin"`
 	RequestStatus string `json:"requestStatus,omitempty"` // pending, accepted, rejected, none
 }
 
@@ -72,14 +73,15 @@ func (s *GroupService) GetByID(id string, currentUserID string) (*Group, error) 
 			u.id, u.username, u.full_name, u.profile_picture,
 			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
 			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
-			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
+			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status,
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND role = 'admin') > 0 as is_admin
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		WHERE g.id = ?
-	`, currentUserID, currentUserID, currentUserID, id).Scan(
+	`, currentUserID, currentUserID, currentUserID, currentUserID, id).Scan(
 		&group.ID, &group.Name, &group.Description, &group.CreatorID, &group.CoverPhoto, &group.Privacy, &group.CreatedAt, &group.UpdatedAt,
 		&group.Creator.ID, &group.Creator.Username, &group.Creator.FullName, &group.Creator.ProfilePicture,
-		&group.MembersCount, &group.IsJoined, &requestStatus,
+		&group.MembersCount, &group.IsJoined, &requestStatus, &group.IsAdmin,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
