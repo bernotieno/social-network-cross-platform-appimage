@@ -200,27 +200,35 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check authorization
-	// Admin can delete any post
-	// Post owner can delete their own post
-	// Group creator can delete posts within their group
+	// Check authorization based on requirements:
+	// - Group creator can delete anyone's post in their group
+	// - Group admin can delete member posts only (not creator posts)
+	// - Regular member can delete only their own posts
+	// - System moderators can delete any post
 
 	canDelete := false
-	if models.UserRole(user.Role) == models.UserRoleAdmin {
+	
+	// System moderator can delete any post
+	if models.UserRole(user.Role) == models.UserRoleModerator {
 		canDelete = true
 	} else if post.UserID == userID {
+		// User can delete their own post
 		canDelete = true
 	} else if post.GroupID.Valid && post.GroupID.String != "" {
-		// Check if the user is the group creator for group posts
+		// For group posts, check group-specific permissions
 		group, err := h.GroupService.GetByID(post.GroupID.String, userID)
 		if err == nil {
 			if group.CreatorID == userID {
+				// Group creator can delete any post in their group
 				canDelete = true
-			} else if models.UserRole(user.Role) == models.UserRoleAdmin {
-				// If the user is a group admin, they can delete posts unless the post is by the group creator
+			} else {
+				// Check if user is a group admin
 				groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(group.ID, userID)
-				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin && post.UserID != group.CreatorID {
-					canDelete = true
+				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin {
+					// Group admin can delete member posts only, not creator posts
+					if post.UserID != group.CreatorID {
+						canDelete = true
+					}
 				}
 			}
 		}
