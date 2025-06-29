@@ -158,18 +158,7 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add creator as admin
-	member := &models.GroupMember{
-		GroupID: group.ID,
-		UserID:  userID,
-		Role:    models.GroupMemberRoleAdmin,
-		Status:  models.GroupMemberStatusAccepted,
-	}
 
-	if err := h.GroupMemberService.Create(member); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to add creator as admin")
-		return
-	}
 
 	// Get user for response
 	user, err := h.UserService.GetByID(userID)
