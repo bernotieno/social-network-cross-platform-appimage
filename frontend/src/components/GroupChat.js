@@ -30,7 +30,11 @@ export default function GroupChat({ groupId, isVisible }) {
     setIsLoading(true);
     try {
       const response = await groupAPI.getGroupMessages(groupId);
-      setMessages(response.data.data.messages || []);
+      // Sort messages in reverse chronological order (newest at the bottom)
+      const sortedMessages = (response.data.data.messages || []).sort((a, b) => 
+        new Date(a.createdAt) - new Date(b.createdAt)
+      );
+      setMessages(sortedMessages);
     } catch (error) {
       console.error('Error fetching group messages:', error);
     } finally {
@@ -62,7 +66,7 @@ export default function GroupChat({ groupId, isVisible }) {
     };
 
     // Add message to local state immediately for instant feedback
-    setMessages(prev => [optimisticMessage, ...prev]);
+    setMessages(prev => [...prev, optimisticMessage]);
     setNewMessage('');
 
     try {
@@ -112,25 +116,44 @@ export default function GroupChat({ groupId, isVisible }) {
 
     // Subscribe to messages
     const unsubscribe = subscribeToMessages((data) => {
-      if (data.roomId === roomId) {
-        const messageData = data.message;
-        const newMsg = {
-          id: messageData.id,
-          content: messageData.content,
-          senderId: messageData.sender,
-          groupId: messageData.groupId,
-          createdAt: messageData.timestamp,
-          sender: messageData.senderInfo
-        };
+      console.log('Received WebSocket message in group chat:', data);
+      
+      // Check if this message is for our group
+      if (data.roomId === roomId || (data.payload && data.payload.roomId === roomId)) {
+        // Extract message data from the payload
+        const messageData = data.message || (data.payload && data.payload.message);
+        
+        if (messageData) {
+          const newMsg = {
+            id: messageData.id || `ws-${Date.now()}`,
+            content: messageData.content,
+            senderId: messageData.sender,
+            groupId: groupId,
+            createdAt: messageData.timestamp || new Date().toISOString(),
+            sender: messageData.senderInfo || {
+              id: messageData.sender,
+              fullName: 'Unknown User',
+              username: 'unknown',
+              profilePicture: null
+            }
+          };
 
-        // Only add if it's not already in the list (avoid duplicates from optimistic updates)
-        setMessages(prev => {
-          const exists = prev.some(msg => msg.id === newMsg.id);
-          if (!exists) {
-            return [newMsg, ...prev];
-          }
-          return prev;
-        });
+          // Only add if it's not already in the list (avoid duplicates from optimistic updates)
+          setMessages(prev => {
+            // Check if we already have this message (by ID or by matching content+sender+timestamp)
+            const exists = prev.some(msg => 
+              msg.id === newMsg.id || 
+              (msg.content === newMsg.content && 
+               msg.senderId === newMsg.senderId &&
+               Math.abs(new Date(msg.createdAt) - new Date(newMsg.createdAt)) < 5000)
+            );
+            
+            if (!exists) {
+              return [...prev, newMsg];
+            }
+            return prev;
+          });
+        }
       }
     });
 
@@ -176,7 +199,7 @@ export default function GroupChat({ groupId, isVisible }) {
           </div>
         ) : (
           <div className={styles.messagesList}>
-            {messages.slice().reverse().map((message) => (
+            {messages.map((message) => (
               <div
                 key={message.id}
                 className={`${styles.message} ${

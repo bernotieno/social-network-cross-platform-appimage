@@ -54,7 +54,7 @@ export const initializeSocket = () => {
           // Trigger custom event based on message type
           if (data.type) {
             console.log('📨 Triggering event:', data.type, 'with payload:', data.payload);
-            triggerEvent(data.type, data.payload);
+            triggerEvent(data.type, data.payload || data);
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -140,7 +140,8 @@ export const disconnectSocket = () => {
  * @param {string} roomId - Room ID to join
  */
 export const joinChatRoom = (roomId) => {
-  emit('join_room', { roomId });
+  console.log('Joining chat room:', roomId);
+  emit('join_room', roomId);
 };
 
 /**
@@ -148,7 +149,8 @@ export const joinChatRoom = (roomId) => {
  * @param {string} roomId - Room ID to leave
  */
 export const leaveChatRoom = (roomId) => {
-  emit('leave_room', { roomId });
+  console.log('Leaving chat room:', roomId);
+  emit('leave_room', roomId);
 };
 
 /**

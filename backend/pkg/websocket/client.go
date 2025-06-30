@@ -35,6 +35,7 @@ type Message struct {
 type DBMessage struct {
 	SenderID   string
 	ReceiverID string
+	GroupID    string
 	Content    string
 }
 
@@ -158,19 +159,25 @@ func (c *Client) ReadPump() {
 					continue
 				}
 
-				// Parse room ID to get receiver ID (format: "userId1-userId2")
-				roomParts := strings.Split(msg.RoomID, "-")
-				if len(roomParts) != 2 {
-					log.Printf("invalid room ID format: %s", msg.RoomID)
-					continue
-				}
-
-				// Determine receiver ID (the other user in the room)
-				var receiverID string
-				if roomParts[0] == c.UserID {
-					receiverID = roomParts[1]
+				// Parse room ID to determine if it's a group or direct message
+				var receiverID, groupID string
+				if strings.HasPrefix(msg.RoomID, "group-") {
+					// Group message
+					groupID = strings.TrimPrefix(msg.RoomID, "group-")
 				} else {
-					receiverID = roomParts[0]
+					// Direct message - parse from roomId (format: "userId1-userId2")
+					roomParts := strings.Split(msg.RoomID, "-")
+					if len(roomParts) != 2 {
+						log.Printf("invalid room ID format: %s", msg.RoomID)
+						continue
+					}
+
+					// Determine receiver ID (the other user in the room)
+					if roomParts[0] == c.UserID {
+						receiverID = roomParts[1]
+					} else {
+						receiverID = roomParts[0]
+					}
 				}
 
 				// Extract content from the message
@@ -194,6 +201,7 @@ func (c *Client) ReadPump() {
 				dbMessage := &DBMessage{
 					SenderID:   c.UserID,
 					ReceiverID: receiverID,
+					GroupID:    groupID,
 					Content:    content,
 				}
 

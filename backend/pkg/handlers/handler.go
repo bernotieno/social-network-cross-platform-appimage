@@ -25,6 +25,7 @@ func (a *MessageServiceAdapter) Create(dbMessage *websocket.DBMessage) error {
 	message := &models.Message{
 		SenderID:   dbMessage.SenderID,
 		ReceiverID: dbMessage.ReceiverID,
+		GroupID:    dbMessage.GroupID,
 		Content:    dbMessage.Content,
 	}
 	return a.service.Create(message)
@@ -249,13 +250,30 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get sender information for the response
+	sender, err := h.UserService.GetByID(userID)
+	if err != nil {
+		log.Printf("Error getting sender info: %v", err)
+		// Continue even if we can't get sender info
+	}
+
+	// Create sender info for WebSocket broadcast
+	senderInfo := map[string]interface{}{
+		"id":             userID,
+		"fullName":       sender.FullName,
+		"username":       sender.Username,
+		"profilePicture": sender.ProfilePicture,
+	}
+
 	// Also broadcast the message via WebSocket for real-time delivery
 	responseMsg := map[string]interface{}{
 		"roomId": roomID,
 		"message": map[string]interface{}{
-			"content":   req.Content,
-			"sender":    userID,
-			"timestamp": message.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			"id":         message.ID,
+			"content":    req.Content,
+			"sender":     userID,
+			"senderInfo": senderInfo,
+			"timestamp":  message.CreatedAt.Format(time.RFC3339),
 		},
 	}
 
@@ -283,6 +301,14 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "Message sent successfully",
+		"data": map[string]interface{}{
+			"message": map[string]interface{}{
+				"id":        message.ID,
+				"content":   message.Content,
+				"senderId":  message.SenderID,
+				"createdAt": message.CreatedAt,
+			},
+		},
 	})
 }
 
