@@ -30,7 +30,7 @@ export default function GroupChat({ groupId, isVisible }) {
     setIsLoading(true);
     try {
       const response = await groupAPI.getGroupMessages(groupId);
-      // Sort messages in reverse chronological order (newest at the bottom)
+      // Sort messages in chronological order (oldest at the top)
       const sortedMessages = (response.data.data.messages || []).sort((a, b) => 
         new Date(a.createdAt) - new Date(b.createdAt)
       );
@@ -45,6 +45,7 @@ export default function GroupChat({ groupId, isVisible }) {
   // Send message
   const handleSendMessage = async (e) => {
     e.preventDefault();
+
     if (!newMessage.trim() || isSending) return;
 
     const messageContent = newMessage.trim();
@@ -72,19 +73,23 @@ export default function GroupChat({ groupId, isVisible }) {
     try {
       // Send to backend
       const response = await groupAPI.sendGroupMessage(groupId, messageContent);
+      console.log('Message sent successfully to database:', response.data);
 
-      // Replace optimistic message with real message from server
+      // Replace optimistic message with real message from server if available
       if (response.data && response.data.data && response.data.data.message) {
         const realMessage = response.data.data.message;
         setMessages(prev => prev.map(msg =>
-          msg.id === optimisticMessage.id ? realMessage : msg
+          msg.id === optimisticMessage.id ? {
+            ...realMessage,
+            sender: optimisticMessage.sender // Keep sender info
+          } : msg
         ));
       }
     } catch (error) {
       console.error('Error sending message:', error);
       // Remove optimistic message on error
       setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-      // Restore message content
+      // Restore the message content
       setNewMessage(messageContent);
       showError('Failed to send message. Please try again.');
     } finally {
@@ -110,6 +115,7 @@ export default function GroupChat({ groupId, isVisible }) {
     if (!groupId) return;
 
     const roomId = `group-${groupId}`;
+    console.log('Setting up WebSocket for group chat room:', roomId);
 
     // Join the chat room
     joinChatRoom(roomId);
@@ -119,11 +125,21 @@ export default function GroupChat({ groupId, isVisible }) {
       console.log('Received WebSocket message in group chat:', data);
       
       // Check if this message is for our group
-      if (data.roomId === roomId || (data.payload && data.payload.roomId === roomId)) {
+      const messageRoomId = data.roomId || (data.payload && data.payload.roomId);
+      
+      if (messageRoomId === roomId) {
+        console.log('Message is for this group chat room');
+        
         // Extract message data from the payload
         const messageData = data.message || (data.payload && data.payload.message);
         
         if (messageData) {
+          // Skip messages sent by the current user (already handled by optimistic updates)
+          if (messageData.sender === user?.id) {
+            console.log('Skipping own message from WebSocket');
+            return;
+          }
+          
           const newMsg = {
             id: messageData.id || `ws-${Date.now()}`,
             content: messageData.content,
@@ -138,7 +154,9 @@ export default function GroupChat({ groupId, isVisible }) {
             }
           };
 
-          // Only add if it's not already in the list (avoid duplicates from optimistic updates)
+          console.log('Adding new message to state:', newMsg);
+
+          // Only add if it's not already in the list (avoid duplicates)
           setMessages(prev => {
             // Check if we already have this message (by ID or by matching content+sender+timestamp)
             const exists = prev.some(msg => 
@@ -159,10 +177,11 @@ export default function GroupChat({ groupId, isVisible }) {
 
     return () => {
       // Leave room and unsubscribe
+      console.log('Leaving group chat room:', roomId);
       leaveChatRoom(roomId);
       unsubscribe();
     };
-  }, [groupId]);
+  }, [groupId, user?.id]);
 
   // Fetch messages when component mounts or groupId changes
   useEffect(() => {
@@ -176,13 +195,10 @@ export default function GroupChat({ groupId, isVisible }) {
     scrollToBottom();
   }, [messages]);
 
-
   const emojiList = emojis();
   const [showEmojis, setShowEmojis] = useState(false);
 
-
   if (!isVisible) return null;
-
 
   return (
     <div className={styles.groupChat}>
@@ -209,14 +225,14 @@ export default function GroupChat({ groupId, isVisible }) {
                 <div className={styles.messageHeader}>
                   <img
                     src={message.sender?.profilePicture ? getUserProfilePictureUrl(message.sender) : getFallbackAvatar(message.sender)}
-                    alt={message.sender?.fullName}
+                    alt={message.sender?.fullName || 'User'}
                     className={styles.senderAvatar}
                     onError={(e) => {
                       e.target.src = getFallbackAvatar(message.sender);
                     }}
                   />
                   <span className={styles.senderName}>
-                    {message.senderId === user?.id ? 'You' : message.sender?.fullName}
+                    {message.senderId === user?.id ? 'You' : message.sender?.fullName || 'Unknown User'}
                   </span>
                   <span className={styles.messageTime}>
                     {new Date(message.createdAt).toLocaleTimeString([], {
