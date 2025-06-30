@@ -150,9 +150,9 @@ export default function Groups() {
             ) : activeTab === 'my-groups' ? (
               <>
                 <p>You haven&apos;t joined any groups yet</p>
-                <Link href="/groups?tab=discover">
+                {/* <Link href="/groups?tab=discover">
                   <Button variant="primary">Discover Groups</Button>
-                </Link>
+                </Link> */}
               </>
             ) : (
               <>
