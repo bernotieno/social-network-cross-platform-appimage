@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { groupAPI } from '@/utils/api';
 import { useAuth } from '@/hooks/useAuth';
-import { initializeSocket, getSocket, subscribeToMessages, joinChatRoom, leaveChatRoom } from '@/utils/socket';
+import { initializeSocket, getSocket, subscribeToMessages, subscribeToTypingStatus, joinChatRoom, leaveChatRoom, sendTypingStatus } from '@/utils/socket';
 import { getUserProfilePictureUrl, getFallbackAvatar } from '@/utils/images';
 import { useAlert } from '@/contexts/AlertContext';
 import styles from '@/styles/GroupChat.module.css';
@@ -14,9 +14,12 @@ export default function GroupChat({ groupId, isVisible }) {
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [typingUsers, setTypingUsers] = useState(new Map()); // Map of userId -> userInfo for users who are typing
+  const [isTyping, setIsTyping] = useState(false);
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -45,6 +48,18 @@ export default function GroupChat({ groupId, isVisible }) {
 
     const messageContent = newMessage.trim();
     setIsSending(true);
+
+    // Stop typing indicator when sending message
+    if (isTyping) {
+      setIsTyping(false);
+      const roomId = `group-${groupId}`;
+      sendTypingStatus(roomId, false);
+    }
+
+    // Clear typing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
 
     // Create optimistic message object
     const optimisticMessage = {
@@ -75,6 +90,11 @@ export default function GroupChat({ groupId, isVisible }) {
         setMessages(prev => prev.map(msg =>
           msg.id === optimisticMessage.id ? realMessage : msg
         ));
+      } else {
+        // If no real message returned, just remove the optimistic flag
+        setMessages(prev => prev.map(msg =>
+          msg.id === optimisticMessage.id ? { ...msg, id: `sent-${Date.now()}` } : msg
+        ));
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -90,7 +110,39 @@ export default function GroupChat({ groupId, isVisible }) {
 
   // Handle emoji insertion
   const insertEmoji = (emoji) => {
-    setNewMessage(prev => prev + emoji);
+    handleTyping(newMessage + emoji);
+  };
+
+  // Handle typing status
+  const handleTyping = (value) => {
+    setNewMessage(value);
+
+    if (!groupId) return;
+
+    const roomId = `group-${groupId}`;
+
+    if (value.trim() && !isTyping) {
+      // User started typing
+      setIsTyping(true);
+      sendTypingStatus(roomId, true);
+    } else if (!value.trim() && isTyping) {
+      // User stopped typing (cleared input)
+      setIsTyping(false);
+      sendTypingStatus(roomId, false);
+    }
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set timeout to stop typing indicator after 3 seconds of inactivity
+    if (value.trim()) {
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false);
+        sendTypingStatus(roomId, false);
+      }, 3000);
+    }
   };
 
   // Initialize WebSocket connection
@@ -108,28 +160,67 @@ export default function GroupChat({ groupId, isVisible }) {
     const roomId = `group-${groupId}`;
 
     // Join the chat room
+    console.log('Joining group chat room:', roomId);
     joinChatRoom(roomId);
 
     // Subscribe to messages
-    const unsubscribe = subscribeToMessages((data) => {
+    const unsubscribeMessages = subscribeToMessages((data) => {
+      console.log('GroupChat received WebSocket message:', data);
       if (data.roomId === roomId) {
         const messageData = data.message;
+        console.log('Processing group message data:', messageData);
+
         const newMsg = {
-          id: messageData.id,
+          id: messageData.id || `ws-${Date.now()}-${messageData.sender}`,
           content: messageData.content,
           senderId: messageData.sender,
-          groupId: messageData.groupId,
+          groupId: messageData.groupId || groupId,
           createdAt: messageData.timestamp,
-          sender: messageData.senderInfo
+          sender: messageData.senderInfo || {
+            id: messageData.sender,
+            fullName: 'Unknown User', // Fallback for WebSocket messages
+            username: 'unknown'
+          }
         };
+
+        console.log('Created new message object:', newMsg);
 
         // Only add if it's not already in the list (avoid duplicates from optimistic updates)
         setMessages(prev => {
-          const exists = prev.some(msg => msg.id === newMsg.id);
+          const exists = prev.some(msg =>
+            (msg.id && newMsg.id && msg.id === newMsg.id) ||
+            (msg.content === newMsg.content && msg.senderId === newMsg.senderId &&
+             Math.abs(new Date(msg.createdAt) - new Date(newMsg.createdAt)) < 1000)
+          );
+          console.log('Message exists check:', exists, 'for message:', newMsg.content);
           if (!exists) {
+            console.log('Adding new message to list');
             return [newMsg, ...prev];
           }
+          console.log('Message already exists, skipping');
           return prev;
+        });
+      }
+    });
+
+    // Subscribe to typing status updates
+    const unsubscribeTyping = subscribeToTypingStatus((typingData) => {
+      console.log('Received typing status:', typingData);
+      if (typingData.roomId === roomId && typingData.userId !== user?.id) {
+        setTypingUsers(prev => {
+          const newMap = new Map(prev);
+          if (typingData.isTyping) {
+            // Add user with their info
+            newMap.set(typingData.userId, typingData.userInfo || {
+              id: typingData.userId,
+              fullName: 'Unknown User',
+              username: 'unknown'
+            });
+          } else {
+            // Remove user
+            newMap.delete(typingData.userId);
+          }
+          return newMap;
         });
       }
     });
@@ -137,9 +228,10 @@ export default function GroupChat({ groupId, isVisible }) {
     return () => {
       // Leave room and unsubscribe
       leaveChatRoom(roomId);
-      unsubscribe();
+      unsubscribeMessages();
+      unsubscribeTyping();
     };
-  }, [groupId]);
+  }, [groupId, user?.id]);
 
   // Fetch messages when component mounts or groupId changes
   useEffect(() => {
@@ -152,6 +244,15 @@ export default function GroupChat({ groupId, isVisible }) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
 
   const emojiList = emojis();
@@ -176,9 +277,9 @@ export default function GroupChat({ groupId, isVisible }) {
           </div>
         ) : (
           <div className={styles.messagesList}>
-            {messages.slice().reverse().map((message) => (
+            {messages.slice().reverse().map((message, index) => (
               <div
-                key={message.id}
+                key={message.id || `temp-${index}-${message.createdAt}`}
                 className={`${styles.message} ${
                   message.senderId === user?.id ? styles.ownMessage : styles.otherMessage
                 }`}
@@ -210,6 +311,25 @@ export default function GroupChat({ groupId, isVisible }) {
             <div ref={messagesEndRef} />
           </div>
         )}
+
+        {/* Typing indicator */}
+        {typingUsers.size > 0 && (
+          <div className={styles.typingIndicator}>
+            {(() => {
+              const typingUsersList = Array.from(typingUsers.values());
+              if (typingUsersList.length === 1) {
+                return `${typingUsersList[0].fullName || typingUsersList[0].username || 'Someone'} is typing...`;
+              } else if (typingUsersList.length === 2) {
+                const names = typingUsersList.map(u => u.fullName || u.username || 'Someone');
+                return `${names[0]} and ${names[1]} are typing...`;
+              } else {
+                const firstTwo = typingUsersList.slice(0, 2).map(u => u.fullName || u.username || 'Someone');
+                const remaining = typingUsersList.length - 2;
+                return `${firstTwo.join(', ')} and ${remaining} other${remaining > 1 ? 's' : ''} are typing...`;
+              }
+            })()}
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSendMessage} className={styles.messageForm}>
@@ -232,7 +352,7 @@ export default function GroupChat({ groupId, isVisible }) {
           <input
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => handleTyping(e.target.value)}
             placeholder="Type a message..."
             className={styles.messageInput}
             disabled={isSending}
