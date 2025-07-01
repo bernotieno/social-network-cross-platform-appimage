@@ -35,6 +35,7 @@ type Message struct {
 type DBMessage struct {
 	SenderID   string
 	ReceiverID string
+	GroupID    string
 	Content    string
 }
 
@@ -43,23 +44,32 @@ type MessageService interface {
 	Create(message *DBMessage) error
 }
 
+// UserInfo represents basic user information for WebSocket clients
+type UserInfo struct {
+	ID       string
+	Username string
+	FullName string
+}
+
 // Client represents a connected WebSocket client
 type Client struct {
 	Hub            *Hub
 	Conn           *websocket.Conn
 	Send           chan []byte
 	UserID         string
+	UserInfo       *UserInfo
 	Rooms          map[string]bool
 	MessageService MessageService
 }
 
 // NewClient creates a new WebSocket client
-func NewClient(hub *Hub, conn *websocket.Conn, userID string, messageService MessageService) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, userID string, userInfo *UserInfo, messageService MessageService) *Client {
 	return &Client{
 		Hub:            hub,
 		Conn:           conn,
 		Send:           make(chan []byte, 256),
 		UserID:         userID,
+		UserInfo:       userInfo,
 		Rooms:          make(map[string]bool),
 		MessageService: messageService,
 	}
@@ -148,6 +158,7 @@ func (c *Client) ReadPump() {
 			}
 		case "chat_message":
 			// Handle chat message
+			log.Printf("Received chat_message for room %s from user %s", msg.RoomID, c.UserID)
 			if msg.RoomID != "" && c.MessageService != nil {
 				// Extract message content
 				var messageContent map[string]interface{}
@@ -156,21 +167,6 @@ func (c *Client) ReadPump() {
 				} else {
 					log.Printf("invalid message content format")
 					continue
-				}
-
-				// Parse room ID to get receiver ID (format: "userId1-userId2")
-				roomParts := strings.Split(msg.RoomID, "-")
-				if len(roomParts) != 2 {
-					log.Printf("invalid room ID format: %s", msg.RoomID)
-					continue
-				}
-
-				// Determine receiver ID (the other user in the room)
-				var receiverID string
-				if roomParts[0] == c.UserID {
-					receiverID = roomParts[1]
-				} else {
-					receiverID = roomParts[0]
 				}
 
 				// Extract content from the message
@@ -190,11 +186,35 @@ func (c *Client) ReadPump() {
 					continue
 				}
 
-				// Create message object for database
-				dbMessage := &DBMessage{
-					SenderID:   c.UserID,
-					ReceiverID: receiverID,
-					Content:    content,
+				// Parse room ID to determine if it's a direct message or group message
+				roomParts := strings.Split(msg.RoomID, "-")
+				var dbMessage *DBMessage
+
+				if len(roomParts) == 2 && roomParts[0] != "group" {
+					// Direct message format: "userId1-userId2"
+					var receiverID string
+					if roomParts[0] == c.UserID {
+						receiverID = roomParts[1]
+					} else {
+						receiverID = roomParts[0]
+					}
+
+					dbMessage = &DBMessage{
+						SenderID:   c.UserID,
+						ReceiverID: receiverID,
+						Content:    content,
+					}
+				} else if len(roomParts) == 2 && roomParts[0] == "group" {
+					// Group message format: "group-groupId"
+					groupID := roomParts[1]
+					dbMessage = &DBMessage{
+						SenderID: c.UserID,
+						GroupID:  groupID,
+						Content:  content,
+					}
+				} else {
+					log.Printf("invalid room ID format: %s", msg.RoomID)
+					continue
 				}
 
 				// Save message to database
@@ -204,13 +224,35 @@ func (c *Client) ReadPump() {
 				}
 
 				// Create response message for broadcast
-				responseMsg := map[string]interface{}{
-					"roomId": msg.RoomID,
-					"message": map[string]interface{}{
-						"content":   content,
-						"sender":    c.UserID,
-						"timestamp": time.Now().Format(time.RFC3339),
-					},
+				var responseMsg map[string]interface{}
+
+				if dbMessage.GroupID != "" {
+					// Group message format - match the format from HTTP API
+					responseMsg = map[string]interface{}{
+						"roomId": msg.RoomID,
+						"message": map[string]interface{}{
+							"id":        "ws-" + time.Now().Format("20060102150405") + "-" + c.UserID, // Temporary ID for WebSocket messages
+							"content":   content,
+							"sender":    c.UserID,
+							"groupId":   dbMessage.GroupID,
+							"timestamp": time.Now().Format(time.RFC3339),
+							"senderInfo": map[string]interface{}{
+								"id": c.UserID,
+								// Note: We don't have full user info in WebSocket client,
+								// but the frontend should handle missing fields gracefully
+							},
+						},
+					}
+				} else {
+					// Direct message format
+					responseMsg = map[string]interface{}{
+						"roomId": msg.RoomID,
+						"message": map[string]interface{}{
+							"content":   content,
+							"sender":    c.UserID,
+							"timestamp": time.Now().Format(time.RFC3339),
+						},
+					}
 				}
 
 				// Serialize the response message
@@ -224,6 +266,7 @@ func (c *Client) ReadPump() {
 				}
 
 				// Broadcast to the room
+				log.Printf("Broadcasting message to room %s", msg.RoomID)
 				c.Hub.Broadcast <- &Broadcast{
 					RoomID:  msg.RoomID,
 					Message: data,
@@ -295,15 +338,13 @@ func (c *Client) WritePump() {
 func (c *Client) JoinRoom(roomID string) {
 	log.Printf("Client %s joining room %s", c.UserID, roomID)
 
-	// Leave all previous rooms first
-	for oldRoomID := range c.Rooms {
-		if oldRoomID != roomID {
-			log.Printf("Client %s leaving previous room %s", c.UserID, oldRoomID)
-			delete(c.Rooms, oldRoomID)
-		}
+	// Check if already in the room
+	if c.Rooms[roomID] {
+		log.Printf("Client %s already in room %s", c.UserID, roomID)
+		return
 	}
 
-	// Join the new room
+	// Join the new room (don't leave other rooms)
 	c.Hub.Register <- &Registration{
 		Client: c,
 		RoomID: roomID,
