@@ -150,9 +150,9 @@ export default function Groups() {
             ) : activeTab === 'my-groups' ? (
               <>
                 <p>You haven&apos;t joined any groups yet</p>
-                <Link href="/groups?tab=discover">
+                {/* <Link href="/groups?tab=discover">
                   <Button variant="primary">Discover Groups</Button>
-                </Link>
+                </Link> */}
               </>
             ) : (
               <>
@@ -201,9 +201,11 @@ export default function Groups() {
                 </div>
 
                 <div className={styles.groupActions}>
-                  <Link href={`/groups/${group.id}`} className={styles.viewGroupLink}>
-                    <Button variant="secondary" fullWidth>View Group</Button>
-                  </Link>
+                  {(group.privacy === 'public' || group.isJoined) && (
+                    <Link href={`/groups/${group.id}`} className={styles.viewGroupLink}>
+                      <Button variant="secondary" fullWidth>View Group</Button>
+                    </Link>
+                  )}
 
                   {group.isJoined ? (
                     <Button
