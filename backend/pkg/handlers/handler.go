@@ -25,6 +25,7 @@ func (a *MessageServiceAdapter) Create(dbMessage *websocket.DBMessage) error {
 	message := &models.Message{
 		SenderID:   dbMessage.SenderID,
 		ReceiverID: dbMessage.ReceiverID,
+		GroupID:    dbMessage.GroupID,
 		Content:    dbMessage.Content,
 	}
 	return a.service.Create(message)
@@ -154,10 +155,25 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("HandleWebSocket: User ID found: %s", userID)
 
+	// Fetch user information for the WebSocket client
+	user, err := h.UserService.GetByID(userID)
+	if err != nil {
+		log.Printf("HandleWebSocket: Error fetching user info: %v", err)
+		conn.Close()
+		return
+	}
+
+	// Create user info for WebSocket client
+	userInfo := &websocket.UserInfo{
+		ID:       user.ID,
+		Username: user.Username,
+		FullName: user.FullName,
+	}
+
 	// Create a new client with message service adapter
 	messageAdapter := &MessageServiceAdapter{service: h.MessageService}
-	client := websocket.NewClient(h.Hub, conn, userID, messageAdapter)
-	log.Printf("HandleWebSocket: Created WebSocket client for user %s", userID)
+	client := websocket.NewClient(h.Hub, conn, userID, userInfo, messageAdapter)
+	log.Printf("HandleWebSocket: Created WebSocket client for user %s (%s)", userID, user.FullName)
 
 	// Register the client with the hub
 	registration := &websocket.Registration{
