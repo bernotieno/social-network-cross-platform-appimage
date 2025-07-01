@@ -92,18 +92,23 @@ func (h *Hub) Run() {
 			// Get the room
 			room, ok := h.Rooms[broadcast.RoomID]
 			if !ok {
+				log.Printf("Room %s not found for broadcast", broadcast.RoomID)
 				continue
 			}
 
+			log.Printf("Broadcasting to room %s with %d clients", broadcast.RoomID, len(room))
 			// Broadcast the message to all clients in the room
 			for client := range room {
 				// Don't send the message back to the sender (unless sender is nil, meaning it's from HTTP API)
 				if broadcast.Sender != nil && client == broadcast.Sender {
+					log.Printf("Skipping sender %s for broadcast", client.UserID)
 					continue
 				}
 
+				log.Printf("Sending message to client %s in room %s", client.UserID, broadcast.RoomID)
 				select {
 				case client.Send <- broadcast.Message:
+					log.Printf("Message sent successfully to client %s", client.UserID)
 				default:
 					// Client's send buffer is full, remove them
 					select {
@@ -162,9 +167,27 @@ func (h *Hub) broadcastUserPresence(userID, status string) {
 
 // broadcastTypingStatus broadcasts typing status to users in a specific room
 func (h *Hub) broadcastTypingStatus(roomID, userID string, isTyping bool) {
+	// Find the user's client to get user information
+	var userInfo map[string]interface{}
+	if client, exists := h.OnlineUsers[userID]; exists && client.UserInfo != nil {
+		userInfo = map[string]interface{}{
+			"id":       client.UserInfo.ID,
+			"username": client.UserInfo.Username,
+			"fullName": client.UserInfo.FullName,
+		}
+	} else {
+		// Fallback if user info is not available
+		userInfo = map[string]interface{}{
+			"id":       userID,
+			"username": "unknown",
+			"fullName": "Unknown User",
+		}
+	}
+
 	typingData := map[string]interface{}{
 		"roomId":   roomID,
 		"userId":   userID,
+		"userInfo": userInfo,
 		"isTyping": isTyping,
 	}
 
