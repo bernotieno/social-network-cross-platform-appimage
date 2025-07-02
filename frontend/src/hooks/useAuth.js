@@ -54,9 +54,6 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoading(true);
       const response = await authAPI.login(email, password);
-      console.log('Login response:', response.data);
-      console.log('Login response headers:', response.headers);
-      console.log('Set-Cookie header:', response.headers['set-cookie']);
 
       // Check if response.data exists and has the expected structure
       if (!response.data || !response.data.data) {
@@ -66,10 +63,7 @@ export const AuthProvider = ({ children }) => {
       const token = response.data.data.token;
       const user = response.data.data.user;
 
-      console.log('Extracted token:', token);
-      console.log('Extracted user:', user);
-
-      // Validate that we got the required fields
+      // Validate token
       if (!token || token === '') {
         throw new Error(`No token received from login API. Got: "${token}"`);
       }
@@ -78,21 +72,19 @@ export const AuthProvider = ({ children }) => {
         throw new Error(`No user data received from login API. Got: ${user}`);
       }
 
-      console.log(">>>",response.data.token);
-      console.log('Extracted token:', token);
-      console.log('Extracted user:', user);
+      // Clear any existing sessions first
+      await authAPI.logout(); // This ensures old sessions are invalidated
 
+      // Set new session
       setAuth(token, user);
       setUser(user);
 
-      // Initialize WebSocket connection after successful login (non-blocking)
-      setTimeout(() => {
-        try {
-          initializeSocket();
-        } catch (error) {
-          console.warn('Failed to initialize WebSocket after login - Real-time features will be disabled:', error);
-        }
-      }, 100);
+      // Initialize WebSocket connection after successful login
+      try {
+        initializeSocket();
+      } catch (error) {
+        console.warn('Failed to initialize WebSocket - Real-time features will be disabled:', error);
+      }
 
       return { success: true };
     } catch (error) {
