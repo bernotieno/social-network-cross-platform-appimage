@@ -19,8 +19,11 @@ type Hub struct {
 	// Register requests from clients
 	Register chan *Registration
 
-	// Unregister requests from clients
+	// Unregister requests from clients (removes from all rooms)
 	Unregister chan *Client
+
+	// UnregisterFromRoom requests from clients (removes from specific room)
+	UnregisterFromRoom chan *Unregistration
 }
 
 // Broadcast represents a message to be broadcast to a room
@@ -36,14 +39,21 @@ type Registration struct {
 	RoomID string
 }
 
+// Unregistration represents a client leaving a specific room
+type Unregistration struct {
+	Client *Client
+	RoomID string
+}
+
 // NewHub creates a new hub
 func NewHub() *Hub {
 	return &Hub{
-		Rooms:       make(map[string]map[*Client]bool),
-		OnlineUsers: make(map[string]*Client),
-		Broadcast:   make(chan *Broadcast),
-		Register:    make(chan *Registration),
-		Unregister:  make(chan *Client),
+		Rooms:              make(map[string]map[*Client]bool),
+		OnlineUsers:        make(map[string]*Client),
+		Broadcast:          make(chan *Broadcast),
+		Register:           make(chan *Registration),
+		Unregister:         make(chan *Client),
+		UnregisterFromRoom: make(chan *Unregistration),
 	}
 }
 
@@ -86,6 +96,22 @@ func (h *Hub) Run() {
 				// Channel is already closed
 			default:
 				close(client.Send)
+			}
+
+		case unregistration := <-h.UnregisterFromRoom:
+			// Remove the client from the specific room only
+			if room, ok := h.Rooms[unregistration.RoomID]; ok {
+				if _, ok := room[unregistration.Client]; ok {
+					log.Printf("Removing client %s from room %s", unregistration.Client.UserID, unregistration.RoomID)
+					delete(room, unregistration.Client)
+					// Delete the room if it's empty
+					if len(room) == 0 {
+						delete(h.Rooms, unregistration.RoomID)
+						log.Printf("Room %s deleted (empty)", unregistration.RoomID)
+					} else {
+						log.Printf("Room %s now has %d clients", unregistration.RoomID, len(room))
+					}
+				}
 			}
 
 		case broadcast := <-h.Broadcast:
