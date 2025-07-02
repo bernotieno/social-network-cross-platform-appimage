@@ -54,8 +54,9 @@ func CreateSessionWithHub(ctx context.Context, db *sql.DB, userID string, w http
 		log.Printf("Broadcasting session invalidation for user: %s", userID)
 		hub.BroadcastSessionInvalidation(userID)
 		
-		// Give a small delay to ensure the WebSocket message is sent
-		time.Sleep(100 * time.Millisecond)
+		// Give a brief moment to ensure the WebSocket message is sent
+		// This is necessary because WebSocket sending is asynchronous
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	// Delete all existing sessions for this user
