@@ -24,9 +24,21 @@ export default function Login() {
   // Check for logout reason on component mount
   useEffect(() => {
     const logoutReason = localStorage.getItem('logoutReason');
+    const logoutTimestamp = localStorage.getItem('logoutTimestamp');
+    
     if (logoutReason === 'session_invalidated') {
-      setSessionMessage('You were logged out because your account was accessed from another device. Please log in again.');
+      let message = 'You were logged out because your account was accessed from another device. Please log in again.';
+      
+      // Add timestamp information if available
+      if (logoutTimestamp) {
+        const logoutTime = new Date(parseInt(logoutTimestamp));
+        const timeString = logoutTime.toLocaleString();
+        message += ` (Logged out at: ${timeString})`;
+      }
+      
+      setSessionMessage(message);
       localStorage.removeItem('logoutReason');
+      localStorage.removeItem('logoutTimestamp');
     }
   }, []);
 
