@@ -48,6 +48,34 @@ export const initializeSocket = () => {
       socket.onmessage = (event) => {
         try {
           console.log('📨 WebSocket message received:', event.data);
+
+          // Check if the message data is valid JSON
+          if (typeof event.data !== 'string') {
+            console.error('WebSocket message is not a string:', typeof event.data, event.data);
+            return;
+          }
+
+          // Check for multiple JSON objects (which would indicate the old bug)
+          const lines = event.data.trim().split('\n');
+          if (lines.length > 1) {
+            console.warn('WebSocket message contains multiple lines, processing each separately:', lines);
+            lines.forEach((line, index) => {
+              if (line.trim()) {
+                try {
+                  const data = JSON.parse(line.trim());
+                  console.log(`📨 Parsed WebSocket data (line ${index + 1}):`, data);
+                  if (data.type) {
+                    console.log('📨 Triggering event:', data.type, 'with payload:', data.payload);
+                    triggerEvent(data.type, data.payload);
+                  }
+                } catch (lineError) {
+                  console.error(`Error parsing WebSocket message line ${index + 1}:`, lineError, 'Line content:', line);
+                }
+              }
+            });
+            return;
+          }
+
           const data = JSON.parse(event.data);
           console.log('📨 Parsed WebSocket data:', data);
 
@@ -58,6 +86,9 @@ export const initializeSocket = () => {
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
+          console.error('Raw message data:', event.data);
+          console.error('Message length:', event.data?.length);
+          console.error('First 200 characters:', event.data?.substring(0, 200));
         }
       };
     } catch (error) {
