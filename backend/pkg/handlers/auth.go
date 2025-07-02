@@ -134,8 +134,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create session
-	sessionID, err := auth.CreateSession(r.Context(), h.DB, user.ID, w, r)
+	// Create session with hub for session invalidation broadcasting
+	sessionID, err := auth.CreateSessionWithHub(r.Context(), h.DB, user.ID, w, r, h.Hub)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create session")
 		return
@@ -185,9 +185,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Password check successful for user %s", user.Email)
 
-	// Create session
+	// Create session with hub for session invalidation broadcasting
 	log.Printf("Creating session for user ID: %s", user.ID)
-	sessionID, err := auth.CreateSession(r.Context(), h.DB, user.ID, w, r)
+	sessionID, err := auth.CreateSessionWithHub(r.Context(), h.DB, user.ID, w, r, h.Hub)
 	if err != nil {
 		log.Printf("Failed to create session: %v", err)
 		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to create session")
