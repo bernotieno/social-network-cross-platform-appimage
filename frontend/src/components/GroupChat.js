@@ -166,8 +166,17 @@ export default function GroupChat({ groupId, isVisible }) {
     // Subscribe to messages
     const unsubscribeMessages = subscribeToMessages((data) => {
       console.log('GroupChat received WebSocket message:', data);
-      if (data.roomId === roomId) {
-        const messageData = data.message;
+
+      // Extract payload from WebSocket message (same as normal chat)
+      const payload = data.payload || data;
+      const messageRoomId = payload.roomId || data.roomId;
+      const messageData = payload.message || data.message;
+
+      console.log('Extracted payload:', payload);
+      console.log('Message room ID:', messageRoomId);
+      console.log('Current room ID:', roomId);
+
+      if (messageRoomId === roomId) {
         console.log('Processing group message data:', messageData);
 
         const newMsg = {
@@ -185,20 +194,45 @@ export default function GroupChat({ groupId, isVisible }) {
 
         console.log('Created new message object:', newMsg);
 
-        // Only add if it's not already in the list (avoid duplicates from optimistic updates)
+        // Handle message deduplication (same logic as normal chat)
         setMessages(prev => {
-          const exists = prev.some(msg =>
-            (msg.id && newMsg.id && msg.id === newMsg.id) ||
-            (msg.content === newMsg.content && msg.senderId === newMsg.senderId &&
-             Math.abs(new Date(msg.createdAt) - new Date(newMsg.createdAt)) < 1000)
-          );
-          console.log('Message exists check:', exists, 'for message:', newMsg.content);
-          if (!exists) {
-            console.log('Adding new message to list');
-            return [newMsg, ...prev];
+          console.log("Processing WebSocket message:", newMsg);
+          console.log("Current messages:", prev);
+
+          // Check if message already exists to prevent duplicates
+          // First check for exact optimistic message match
+          const optimisticMessageIndex = prev.findIndex(msg => {
+            const isMatch = msg.id && msg.id.startsWith('temp-') &&
+              msg.content === newMsg.content &&
+              msg.senderId === newMsg.senderId;
+            console.log("Checking optimistic message:", msg, "Match:", isMatch);
+            return isMatch;
+          });
+
+          if (optimisticMessageIndex !== -1) {
+            // Replace optimistic message with confirmed message
+            console.log("Replacing optimistic message with confirmed message at index:", optimisticMessageIndex);
+            const updatedMessages = [...prev];
+            updatedMessages[optimisticMessageIndex] = newMsg;
+            console.log("Updated messages:", updatedMessages);
+            return updatedMessages;
           }
-          console.log('Message already exists, skipping');
-          return prev;
+
+          // Check if message already exists (for regular duplicates)
+          const messageExists = prev.some(msg =>
+            !msg.id?.startsWith('temp-') &&
+            msg.content === newMsg.content &&
+            msg.senderId === newMsg.senderId &&
+            Math.abs(new Date(msg.createdAt) - new Date(newMsg.createdAt)) < 5000 // Within 5 seconds
+          );
+
+          if (!messageExists) {
+            console.log("Adding new message:", newMsg);
+            return [newMsg, ...prev];
+          } else {
+            console.log("Message already exists, skipping");
+            return prev;
+          }
         });
       }
     });
