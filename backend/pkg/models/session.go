@@ -106,3 +106,23 @@ func (s *SessionService) CleanupExpiredSessions() error {
 	}
 	return nil
 }
+
+// IsLatestSession checks if the given session ID is the most recent one for the user
+func (s *SessionService) IsLatestSession(userID string, sessionID string) (bool, error) {
+	var latestSessionID string
+	err := s.DB.QueryRow(`
+        SELECT id FROM sessions 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT 1
+    `, userID).Scan(&latestSessionID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get latest session: %w", err)
+	}
+
+	return latestSessionID == sessionID, nil
+}
