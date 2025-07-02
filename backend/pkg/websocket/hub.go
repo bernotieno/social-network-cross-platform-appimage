@@ -200,3 +200,31 @@ func (h *Hub) broadcastTypingStatus(roomID, userID string, isTyping bool) {
 		}
 	}
 }
+
+// BroadcastSessionInvalidation notifies a user that their session has been invalidated
+func (h *Hub) BroadcastSessionInvalidation(userID string) {
+	message := map[string]interface{}{
+		"type": "session_invalidated",
+		"payload": map[string]interface{}{
+			"message": "Your session has been invalidated due to a new login from another device",
+		},
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling session invalidation message: %v", err)
+		return
+	}
+
+	// Send to the specific user if they're online
+	if client, ok := h.OnlineUsers[userID]; ok {
+		select {
+		case client.Send <- data:
+			log.Printf("Session invalidation message sent to user %s", userID)
+		default:
+			log.Printf("Failed to send session invalidation message to user %s - channel full", userID)
+		}
+	} else {
+		log.Printf("User %s not online, cannot send session invalidation message", userID)
+	}
+}
