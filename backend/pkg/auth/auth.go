@@ -13,6 +13,11 @@ import (
 	"github.com/gorilla/sessions"
 )
 
+// SessionInvalidationBroadcaster interface for broadcasting session invalidation
+type SessionInvalidationBroadcaster interface {
+	BroadcastSessionInvalidation(userID string)
+}
+
 // Session cookie name
 const (
 	SessionCookieName = "social_network_session"
@@ -36,8 +41,25 @@ func Initialize(secret []byte) {
 
 // CreateSession creates a new session for a user
 func CreateSession(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request) (string, error) {
-	// Delete all existing sessions for this user first
+	return CreateSessionWithHub(ctx, db, userID, w, r, nil)
+}
+
+// CreateSessionWithHub creates a new session for a user and optionally broadcasts session invalidation
+func CreateSessionWithHub(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request, hub SessionInvalidationBroadcaster) (string, error) {
 	sessionService := models.NewSessionService(db)
+	
+	// First, notify existing sessions that they will be invalidated (if hub is provided)
+	// This gives connected clients a chance to receive the message before sessions are deleted
+	if hub != nil {
+		log.Printf("Broadcasting session invalidation for user: %s", userID)
+		hub.BroadcastSessionInvalidation(userID)
+		
+		// Give a small delay to ensure the WebSocket message is sent
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Delete all existing sessions for this user
+	log.Printf("Deleting all existing sessions for user: %s", userID)
 	if err := sessionService.DeleteAllForUser(userID); err != nil {
 		return "", fmt.Errorf("failed to delete existing sessions: %w", err)
 	}
@@ -107,27 +129,32 @@ func ValidateSession(ctx context.Context, db *sql.DB, sessionID string) (string,
 	sessionService := models.NewSessionService(db)
 	session, err := sessionService.GetByID(sessionID)
 	if err != nil {
+		log.Printf("Session validation failed - session not found: %s, error: %v", sessionID, err)
 		return "", err
+	}
+
+	// Check if session has expired
+	if session.ExpiresAt.Before(time.Now()) {
+		log.Printf("Session validation failed - session expired: %s", sessionID)
+		sessionService.Delete(sessionID)
+		return "", errors.New("session has expired")
 	}
 
 	// Check if this is the most recent session for this user
 	isValid, err := sessionService.IsLatestSession(session.UserID, sessionID)
 	if err != nil {
+		log.Printf("Session validation failed - error checking latest session: %s, error: %v", sessionID, err)
 		return "", fmt.Errorf("failed to validate session: %w", err)
 	}
 
 	if !isValid {
+		log.Printf("Session validation failed - not the latest session: %s for user: %s", sessionID, session.UserID)
 		// Delete invalid session
 		sessionService.Delete(sessionID)
 		return "", errors.New("session invalidated by newer login")
 	}
 
-	// Check expiration
-	if session.ExpiresAt.Before(time.Now()) {
-		sessionService.Delete(sessionID)
-		return "", errors.New("session has expired")
-	}
-
+	log.Printf("Session validation successful: %s for user: %s", sessionID, session.UserID)
 	return session.UserID, nil
 }
 
