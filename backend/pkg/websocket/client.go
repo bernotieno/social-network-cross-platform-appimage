@@ -237,9 +237,10 @@ func (c *Client) ReadPump() {
 							"groupId":   dbMessage.GroupID,
 							"timestamp": time.Now().Format(time.RFC3339),
 							"senderInfo": map[string]interface{}{
-								"id": c.UserID,
-								// Note: We don't have full user info in WebSocket client,
-								// but the frontend should handle missing fields gracefully
+								"id":             c.UserID,
+								"username":       c.UserInfo.Username,
+								"fullName":       c.UserInfo.FullName,
+								"profilePicture": "", // Profile picture not available in WebSocket context
 							},
 						},
 					}
@@ -265,8 +266,15 @@ func (c *Client) ReadPump() {
 					continue
 				}
 
+				// Validate the JSON is properly formatted
+				var testParse interface{}
+				if err := json.Unmarshal(data, &testParse); err != nil {
+					log.Printf("error validating marshaled JSON: %v, data: %s", err, string(data))
+					continue
+				}
+
 				// Broadcast to the room
-				log.Printf("Broadcasting message to room %s", msg.RoomID)
+				log.Printf("Broadcasting message to room %s: %s", msg.RoomID, string(data))
 				c.Hub.Broadcast <- &Broadcast{
 					RoomID:  msg.RoomID,
 					Message: data,
@@ -309,21 +317,25 @@ func (c *Client) WritePump() {
 				return
 			}
 
-			w, err := c.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
+			// Send the current message
+			log.Printf("Sending WebSocket message to client %s: %s", c.UserID, string(message))
+			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Printf("Error sending WebSocket message to client %s: %v", c.UserID, err)
 				return
 			}
-			w.Write(message)
 
-			// Add queued messages to the current websocket message
+			// Send any additional queued messages separately
 			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.Send)
+			if n > 0 {
+				log.Printf("Sending %d additional queued messages to client %s", n, c.UserID)
 			}
-
-			if err := w.Close(); err != nil {
-				return
+			for i := 0; i < n; i++ {
+				queuedMessage := <-c.Send
+				log.Printf("Sending queued WebSocket message to client %s: %s", c.UserID, string(queuedMessage))
+				if err := c.Conn.WriteMessage(websocket.TextMessage, queuedMessage); err != nil {
+					log.Printf("Error sending queued WebSocket message to client %s: %v", c.UserID, err)
+					return
+				}
 			}
 		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -355,6 +367,19 @@ func (c *Client) JoinRoom(roomID string) {
 
 // LeaveRoom removes the client from a room
 func (c *Client) LeaveRoom(roomID string) {
-	c.Hub.Unregister <- c
+	log.Printf("Client %s leaving room %s", c.UserID, roomID)
+
+	// Check if client is actually in the room
+	if !c.Rooms[roomID] {
+		log.Printf("Client %s not in room %s", c.UserID, roomID)
+		return
+	}
+
+	// Remove from the specific room only
+	c.Hub.UnregisterFromRoom <- &Unregistration{
+		Client: c,
+		RoomID: roomID,
+	}
 	delete(c.Rooms, roomID)
+	log.Printf("Client %s successfully left room %s", c.UserID, roomID)
 }
