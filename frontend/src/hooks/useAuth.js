@@ -56,27 +56,37 @@ export const AuthProvider = ({ children }) => {
     if (user) {
       try {
         unsubscribe = subscribeToSessionInvalidation((data) => {
-          console.warn('Session invalidated:', data?.message || 'Your session has been invalidated due to a new login from another device');
+          console.warn('🔒 Session invalidated:', data?.message || 'Your session has been invalidated due to a new login from another device');
           
           // Create a more user-friendly notification
           const message = data?.message || 'Your account has been logged in from another device. For security reasons, you have been logged out from this session.';
           
-          // Show notification using browser's built-in notification or alert
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Session Expired', {
-              body: message,
-              icon: '/favicon.ico'
-            });
-          } else {
-            // Fallback to alert
-            alert(`Security Notice: ${message}`);
+          // Request notification permission if not already granted
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
           }
+          
+          // Show notification using browser's built-in notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('🔒 Session Expired - Security Notice', {
+              body: message,
+              icon: '/favicon.ico',
+              requireInteraction: true, // Keep notification visible until user interacts
+              tag: 'session-invalidated' // Prevent duplicate notifications
+            });
+          }
+          
+          // Also show a console warning for developers
+          console.warn('🔒 SECURITY NOTICE: Session invalidated due to new login from another device');
           
           // Store the reason for logout to show on login page
           localStorage.setItem('logoutReason', 'session_invalidated');
+          localStorage.setItem('logoutTimestamp', Date.now().toString());
           
-          // Automatically log out the user
-          logout();
+          // Automatically log out the user after a brief delay to ensure message is processed
+          setTimeout(() => {
+            logout();
+          }, 100);
         });
       } catch (error) {
         console.warn('Failed to subscribe to session invalidation events:', error);
