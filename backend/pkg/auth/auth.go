@@ -36,30 +36,32 @@ func Initialize(secret []byte) {
 
 // CreateSession creates a new session for a user
 func CreateSession(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request) (string, error) {
-	// Create a new session in the database
+	// Delete all existing sessions for this user first
 	sessionService := models.NewSessionService(db)
+	if err := sessionService.DeleteAllForUser(userID); err != nil {
+		return "", fmt.Errorf("failed to delete existing sessions: %w", err)
+	}
+
+	// Create new session
 	session, err := sessionService.Create(userID, SessionDuration)
 	if err != nil {
 		return "", fmt.Errorf("failed to create session in database: %w", err)
 	}
 
-	// Create a new cookie session
+	// Create cookie session
 	cookieSession, err := Store.Get(r, SessionCookieName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get cookie session: %w", err)
 	}
 
-	// Initialize session values if nil
+	// Set session values
 	if cookieSession.Values == nil {
 		cookieSession.Values = make(map[interface{}]interface{})
 	}
-
-	// Set session ID in cookie
 	cookieSession.Values["session_id"] = session.ID
 
-	// Save the session cookie
+	// Save cookie
 	if err := cookieSession.Save(r, w); err != nil {
-		// If cookie save fails, clean up the database session
 		sessionService.Delete(session.ID)
 		return "", fmt.Errorf("failed to save session cookie: %w", err)
 	}
@@ -102,11 +104,28 @@ func GetSessionCookie(r *http.Request) (string, error) {
 
 // ValidateSession validates a session and returns the user ID
 func ValidateSession(ctx context.Context, db *sql.DB, sessionID string) (string, error) {
-	// Validate session in the database
 	sessionService := models.NewSessionService(db)
 	session, err := sessionService.GetByID(sessionID)
 	if err != nil {
 		return "", err
+	}
+
+	// Check if this is the most recent session for this user
+	isValid, err := sessionService.IsLatestSession(session.UserID, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate session: %w", err)
+	}
+
+	if !isValid {
+		// Delete invalid session
+		sessionService.Delete(sessionID)
+		return "", errors.New("session invalidated by newer login")
+	}
+
+	// Check expiration
+	if session.ExpiresAt.Before(time.Now()) {
+		sessionService.Delete(sessionID)
+		return "", errors.New("session has expired")
 	}
 
 	return session.UserID, nil
