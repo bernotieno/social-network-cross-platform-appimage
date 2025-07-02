@@ -11,7 +11,7 @@ import {
   updateUserData as updateStoredUserData
 } from '@/utils/auth';
 import { authAPI } from '@/utils/api';
-import { disconnectSocket, initializeSocket } from '@/utils/socket';
+import { disconnectSocket, initializeSocket, subscribeToSessionInvalidation } from '@/utils/socket';
 
 // Create auth context
 const AuthContext = createContext({
@@ -49,14 +49,66 @@ export const AuthProvider = ({ children }) => {
     checkAuthentication();
   }, []);
 
+  // Listen for session invalidation events
+  useEffect(() => {
+    let unsubscribe;
+    
+    if (user) {
+      try {
+        unsubscribe = subscribeToSessionInvalidation((data) => {
+          console.warn('🔒 Session invalidated:', data?.message || 'Your session has been invalidated due to a new login from another device');
+          
+          // Create a more user-friendly notification
+          const message = data?.message || 'Your account has been logged in from another device. For security reasons, you have been logged out from this session.';
+          
+          // Request notification permission if not already granted
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+          
+          // Show notification using browser's built-in notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('🔒 Session Expired - Security Notice', {
+              body: message,
+              icon: '/favicon.ico',
+              requireInteraction: true, // Keep notification visible until user interacts
+              tag: 'session-invalidated' // Prevent duplicate notifications
+            });
+          }
+          
+          // Also show a console warning for developers
+          console.warn('🔒 SECURITY NOTICE: Session invalidated due to new login from another device');
+          
+          // Store the reason for logout to show on login page
+          localStorage.setItem('logoutReason', 'session_invalidated');
+          localStorage.setItem('logoutTimestamp', Date.now().toString());
+          
+          // Automatically log out the user after a brief delay to ensure message is processed
+          setTimeout(() => {
+            logout();
+          }, 100);
+        });
+      } catch (error) {
+        console.warn('Failed to subscribe to session invalidation events:', error);
+      }
+    }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user]);
+
   // Login function
   const login = async (email, password) => {
     try {
       setIsLoading(true);
+      
+      // Clear any previous logout reason
+      localStorage.removeItem('logoutReason');
+      
       const response = await authAPI.login(email, password);
-      console.log('Login response:', response.data);
-      console.log('Login response headers:', response.headers);
-      console.log('Set-Cookie header:', response.headers['set-cookie']);
 
       // Check if response.data exists and has the expected structure
       if (!response.data || !response.data.data) {
@@ -66,10 +118,7 @@ export const AuthProvider = ({ children }) => {
       const token = response.data.data.token;
       const user = response.data.data.user;
 
-      console.log('Extracted token:', token);
-      console.log('Extracted user:', user);
-
-      // Validate that we got the required fields
+      // Validate token
       if (!token || token === '') {
         throw new Error(`No token received from login API. Got: "${token}"`);
       }
@@ -78,21 +127,16 @@ export const AuthProvider = ({ children }) => {
         throw new Error(`No user data received from login API. Got: ${user}`);
       }
 
-      console.log(">>>",response.data.token);
-      console.log('Extracted token:', token);
-      console.log('Extracted user:', user);
-
+      // Set new session (backend handles invalidating old sessions)
       setAuth(token, user);
       setUser(user);
 
-      // Initialize WebSocket connection after successful login (non-blocking)
-      setTimeout(() => {
-        try {
-          initializeSocket();
-        } catch (error) {
-          console.warn('Failed to initialize WebSocket after login - Real-time features will be disabled:', error);
-        }
-      }, 100);
+      // Initialize WebSocket connection after successful login
+      try {
+        initializeSocket();
+      } catch (error) {
+        console.warn('Failed to initialize WebSocket - Real-time features will be disabled:', error);
+      }
 
       return { success: true };
     } catch (error) {

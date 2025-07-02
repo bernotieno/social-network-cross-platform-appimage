@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,9 +16,31 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [sessionMessage, setSessionMessage] = useState('');
   
   const { login } = useAuth();
   const router = useRouter();
+
+  // Check for logout reason on component mount
+  useEffect(() => {
+    const logoutReason = localStorage.getItem('logoutReason');
+    const logoutTimestamp = localStorage.getItem('logoutTimestamp');
+    
+    if (logoutReason === 'session_invalidated') {
+      let message = 'You were logged out because your account was accessed from another device. Please log in again.';
+      
+      // Add timestamp information if available
+      if (logoutTimestamp) {
+        const logoutTime = new Date(parseInt(logoutTimestamp));
+        const timeString = logoutTime.toLocaleString();
+        message += ` (Logged out at: ${timeString})`;
+      }
+      
+      setSessionMessage(message);
+      localStorage.removeItem('logoutReason');
+      localStorage.removeItem('logoutTimestamp');
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,6 +60,11 @@ export default function Login() {
     // Clear login error when user types
     if (loginError) {
       setLoginError('');
+    }
+    
+    // Clear session message when user starts typing
+    if (sessionMessage) {
+      setSessionMessage('');
     }
   };
 
@@ -88,6 +115,20 @@ export default function Login() {
       <div className={styles.authCard}>
         <h1 className={styles.authTitle}>Login</h1>
         
+        {sessionMessage && (
+          <div className={styles.warningAlert} style={{
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            color: '#856404',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '14px'
+          }}>
+            <strong>Security Notice:</strong> {sessionMessage}
+          </div>
+        )}
+        
         {loginError && (
           <div className={styles.errorAlert}>
             {loginError}
@@ -134,7 +175,7 @@ export default function Login() {
         
         <div className={styles.authLinks}>
           <p>
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/auth/register" className={styles.authLink}>
               Register
             </Link>
