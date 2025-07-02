@@ -40,7 +40,11 @@ export const initializeSocket = () => {
 
       socket.onerror = (error) => {
         console.error('🔌 WebSocket connection error:', error);
-        console.error('🔌 WebSocket connection error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        console.error('🔌 WebSocket connection error details:', {
+          message: error.message || 'Unknown error',
+          type: error.type || 'error',
+          target: error.target ? 'WebSocket' : 'Unknown'
+        });
         // Trigger custom 'connect_error' event
         triggerEvent('connect_error', error);
       };
@@ -277,4 +281,14 @@ export const subscribeToTypingStatus = (callback) => {
  */
 export const sendTypingStatus = (roomId, isTyping) => {
   emit('typing_status', { roomId, isTyping });
+};
+
+/**
+ * Subscribe to session invalidation events
+ * @param {function} callback - Function to call when session is invalidated
+ * @returns {function} - Function to unsubscribe
+ */
+export const subscribeToSessionInvalidation = (callback) => {
+  on('session_invalidated', callback);
+  return () => off('session_invalidated', callback);
 };
