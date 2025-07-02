@@ -11,7 +11,7 @@ import {
   updateUserData as updateStoredUserData
 } from '@/utils/auth';
 import { authAPI } from '@/utils/api';
-import { disconnectSocket, initializeSocket } from '@/utils/socket';
+import { disconnectSocket, initializeSocket, subscribeToSessionInvalidation } from '@/utils/socket';
 
 // Create auth context
 const AuthContext = createContext({
@@ -49,10 +49,55 @@ export const AuthProvider = ({ children }) => {
     checkAuthentication();
   }, []);
 
+  // Listen for session invalidation events
+  useEffect(() => {
+    let unsubscribe;
+    
+    if (user) {
+      try {
+        unsubscribe = subscribeToSessionInvalidation((data) => {
+          console.warn('Session invalidated:', data?.message || 'Your session has been invalidated due to a new login from another device');
+          
+          // Create a more user-friendly notification
+          const message = data?.message || 'Your account has been logged in from another device. For security reasons, you have been logged out from this session.';
+          
+          // Show notification using browser's built-in notification or alert
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Session Expired', {
+              body: message,
+              icon: '/favicon.ico'
+            });
+          } else {
+            // Fallback to alert
+            alert(`Security Notice: ${message}`);
+          }
+          
+          // Store the reason for logout to show on login page
+          localStorage.setItem('logoutReason', 'session_invalidated');
+          
+          // Automatically log out the user
+          logout();
+        });
+      } catch (error) {
+        console.warn('Failed to subscribe to session invalidation events:', error);
+      }
+    }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user]);
+
   // Login function
   const login = async (email, password) => {
     try {
       setIsLoading(true);
+      
+      // Clear any previous logout reason
+      localStorage.removeItem('logoutReason');
+      
       const response = await authAPI.login(email, password);
 
       // Check if response.data exists and has the expected structure
@@ -72,10 +117,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error(`No user data received from login API. Got: ${user}`);
       }
 
-      // Clear any existing sessions first
-      await authAPI.logout(); // This ensures old sessions are invalidated
-
-      // Set new session
+      // Set new session (backend handles invalidating old sessions)
       setAuth(token, user);
       setUser(user);
 
