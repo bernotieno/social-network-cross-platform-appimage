@@ -29,11 +29,15 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           <AlertProvider>
             <ToastProvider>
-              <Navbar />
-              <main>
-                {children}
-              </main>
-              <ToastContainer />
+              <div className="app-background">
+                <Navbar />
+                <main className="main-content">
+                  <div className="content-wrapper">
+                    {children}
+                  </div>
+                </main>
+                <ToastContainer />
+              </div>
             </ToastProvider>
           </AlertProvider>
         </AuthProvider>

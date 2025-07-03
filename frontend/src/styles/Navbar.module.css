@@ -1,69 +1,131 @@
 .navbar {
-  background-color: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   width: 100%;
   z-index: 1000;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.navbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+  pointer-events: none;
 }
 
 .container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 1rem;
-  max-width: 1200px;
+  padding: 0 2rem;
+  max-width: 1400px;
   margin: 0 auto;
-  height: 60px;
+  height: 70px;
+  position: relative;
+  z-index: 1;
 }
 
 .logo {
-  font-size: 1.5rem;
-  font-weight: bold;
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
 }
 
 .logoText {
-  color: #10b981;
+  background: linear-gradient(135deg, var(--primary-600), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.logoText:hover {
+  background: linear-gradient(135deg, var(--primary-700), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transform: scale(1.05);
 }
 
 .navLinks {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 2rem;
 }
 
 .navLink {
-  color: #65676b;
+  color: var(--foreground-muted);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
   position: relative;
-  transition: color 0.2s;
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+}
+
+.navLink::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary-500), var(--accent-purple));
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
 }
 
 .navLink:hover {
-  color: #10b981;
+  color: var(--primary-600);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.navLink:hover::before {
+  width: 80%;
 }
 
 .badge {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  background-color: #e41e3f;
+  top: -6px;
+  right: -6px;
+  background: linear-gradient(135deg, var(--error), #ff6b6b);
   color: white;
   font-size: 0.7rem;
-  font-weight: bold;
-  width: 18px;
-  height: 18px;
+  font-weight: 700;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  border: 2px solid white;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 
 .notificationDropdown {
@@ -73,18 +135,21 @@
 .notificationButton {
   background: none;
   border: none;
-  color: #65676b;
+  color: var(--foreground-muted);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
   position: relative;
-  transition: color 0.2s;
+  transition: all 0.3s ease;
   cursor: pointer;
-  font-size: inherit;
+  font-size: 0.95rem;
   font-family: inherit;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
 }
 
 .notificationButton:hover {
-  color: #10b981;
+  color: var(--primary-600);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .profileDropdown {
@@ -95,37 +160,73 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 0.25rem;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.profileButton:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
 .avatar {
   border-radius: 50%;
   object-fit: cover;
+  border: 2px solid var(--primary-200);
+  transition: border-color 0.3s ease;
+}
+
+.profileButton:hover .avatar {
+  border-color: var(--primary-400);
 }
 
 .avatarPlaceholder {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background-color: #10b981;
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border: 2px solid var(--primary-200);
+  transition: all 0.3s ease;
+}
+
+.profileButton:hover .avatarPlaceholder {
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  border-color: var(--primary-400);
 }
 
 .dropdownContent {
   position: absolute;
   right: 0;
-  top: 100%;
-  background-color: white;
-  min-width: 160px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  padding: 0.5rem 0;
+  top: calc(100% + 0.5rem);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  min-width: 180px;
+  box-shadow: var(--shadow-xl);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 0;
   z-index: 1;
   display: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .profileDropdown:hover .dropdownContent {
@@ -134,20 +235,23 @@
 
 .dropdownItem {
   display: block;
-  padding: 0.5rem 1rem;
-  color: #65676b;
+  padding: 0.75rem 1.25rem;
+  color: var(--foreground-muted);
   text-decoration: none;
   text-align: left;
   width: 100%;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .dropdownItem:hover {
-  background-color: #f0f2f5;
-  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--primary-600);
+  transform: translateX(4px);
 }
 
 /* Mobile menu */
@@ -156,15 +260,23 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.5rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  transition: all 0.3s ease;
+}
+
+.mobileMenuButton:hover {
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .hamburger {
   display: block;
   width: 24px;
-  height: 2px;
-  background-color: #65676b;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-600), var(--accent-purple));
   position: relative;
+  border-radius: 2px;
+  transition: all 0.3s ease;
 }
 
 .hamburger::before,
@@ -172,44 +284,83 @@
   content: '';
   position: absolute;
   width: 24px;
-  height: 2px;
-  background-color: #65676b;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-600), var(--accent-purple));
   left: 0;
+  border-radius: 2px;
+  transition: all 0.3s ease;
 }
 
 .hamburger::before {
-  top: -6px;
+  top: -8px;
 }
 
 .hamburger::after {
-  bottom: -6px;
+  bottom: -8px;
 }
 
 /* Media queries for responsive design */
 @media (max-width: 768px) {
+  .container {
+    padding: 0 1rem;
+  }
+
   .mobileMenuButton {
     display: block;
   }
 
   .navLinks {
     position: fixed;
-    top: 60px;
+    top: 70px;
     left: 0;
     right: 0;
-    background-color: white;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     flex-direction: column;
-    padding: 1rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 2rem 1rem;
+    box-shadow: var(--shadow-xl);
     display: none;
     z-index: 999;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    gap: 1rem;
   }
 
   .navLinks.active {
     display: flex;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .navLink {
+    width: 100%;
+    text-align: center;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.5rem;
   }
 
   .notificationDropdown {
     width: 100%;
+  }
+
+  .notificationButton {
+    width: 100%;
+    text-align: center;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.5);
   }
 
   .profileDropdown {
@@ -221,5 +372,8 @@
     box-shadow: none;
     display: block;
     margin-top: 0.5rem;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 }
