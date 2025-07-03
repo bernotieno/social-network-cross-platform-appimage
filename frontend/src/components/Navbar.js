@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,9 +14,17 @@ const Navbar = () => {
   const { notifications, unreadCount, markAsRead, fetchNotifications } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  
+  const navbarRef = useRef(null);
+  const profileDropdownRef = useRef(null);
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
   };
 
   const toggleNotificationDropdown = () => {
@@ -27,8 +35,32 @@ const Navbar = () => {
     setNotificationDropdownOpen(false);
   };
 
+  const toggleProfileMenu = () => {
+    setProfileMenuOpen(!profileMenuOpen);
+  };
+
+  const closeProfileMenu = () => {
+    setProfileMenuOpen(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (navbarRef.current && !navbarRef.current.contains(event.target)) {
+        closeMobileMenu();
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        closeProfileMenu();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
-    <nav className={styles.navbar}>
+    <nav className={styles.navbar} ref={navbarRef}>
       <div className={styles.container}>
         <div className={styles.logo}>
           <Link href="/">
@@ -49,19 +81,19 @@ const Navbar = () => {
         <div className={`${styles.navLinks} ${mobileMenuOpen ? styles.active : ''}`}>
           {isAuthenticated ? (
             <>
-              <Link href="/" className={styles.navLink}>
+              <Link href="/" className={styles.navLink} onClick={closeMobileMenu}>
                 Home
               </Link>
-              <Link href="/search" className={styles.navLink}>
+              <Link href="/search" className={styles.navLink} onClick={closeMobileMenu}>
                 Discover
               </Link>
-              <Link href="/posts/create" className={styles.navLink}>
+              <Link href="/posts/create" className={styles.navLink} onClick={closeMobileMenu}>
                 Create Post
               </Link>
-              <Link href="/groups" className={styles.navLink}>
+              <Link href="/groups" className={styles.navLink} onClick={closeMobileMenu}>
                 Groups
               </Link>
-              <Link href="/chat" className={styles.navLink}>
+              <Link href="/chat" className={styles.navLink} onClick={closeMobileMenu}>
                 Chat
               </Link>
               <div className={styles.notificationDropdown}>
@@ -83,8 +115,8 @@ const Navbar = () => {
                   onRefresh={fetchNotifications}
                 />
               </div>
-              <div className={styles.profileDropdown}>
-                <button className={styles.profileButton}>
+              <div className={styles.profileDropdown} ref={profileDropdownRef}>
+                <button className={styles.profileButton} onClick={toggleProfileMenu}>
                   {user?.profilePicture ? (
                     <Image
                       src={getImageUrl(user.profilePicture)}
@@ -99,11 +131,11 @@ const Navbar = () => {
                     </div>
                   )}
                 </button>
-                <div className={styles.dropdownContent}>
-                  <Link href={`/profile/${user?.id}`} className={styles.dropdownItem}>
+                <div className={`${styles.dropdownContent} ${profileMenuOpen ? styles.active : ''}`}>
+                  <Link href={`/profile/${user?.id}`} className={styles.dropdownItem} onClick={closeProfileMenu}>
                     Profile
                   </Link>
-                  <button onClick={logout} className={styles.dropdownItem}>
+                  <button onClick={() => { logout(); closeProfileMenu(); }} className={styles.dropdownItem}>
                     Logout
                   </button>
                 </div>
@@ -111,10 +143,10 @@ const Navbar = () => {
             </>
           ) : (
             <>
-              <Link href="/auth/login" className={styles.navLink}>
+              <Link href="/auth/login" className={styles.navLink} onClick={closeMobileMenu}>
                 Login
               </Link>
-              <Link href="/auth/register" className={styles.navLink}>
+              <Link href="/auth/register" className={styles.navLink} onClick={closeMobileMenu}>
                 Register
               </Link>
             </>
