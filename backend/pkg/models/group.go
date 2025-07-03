@@ -100,13 +100,13 @@ func (s *GroupService) GetByID(id string, currentUserID string) (*Group, error) 
 		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
 			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0 as is_joined,
 			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status,
-			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND (role = 'admin' OR role = 'creator')) > 0 as is_admin
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND (role = 'admin' OR role = 'creator') AND status = 'accepted') > 0 as is_admin
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		WHERE g.id = ?
-	`, currentUserID, currentUserID, currentUserID, currentUserID, id).Scan(
+	`, currentUserID, currentUserID, currentUserID, id).Scan(
 		&group.ID, &group.Name, &group.Description, &group.CreatorID, &group.CoverPhoto, &group.Privacy, &group.CreatedAt, &group.UpdatedAt,
 		&group.Creator.ID, &group.Creator.Username, &group.Creator.FullName, &group.Creator.ProfilePicture,
 		&group.MembersCount, &group.IsJoined, &requestStatus, &group.IsAdmin,
@@ -126,7 +126,7 @@ func (s *GroupService) GetByID(id string, currentUserID string) (*Group, error) 
 	}
 
 	// Check if the user can view this group
-	if group.Privacy == GroupPrivacyPrivate && !group.IsJoined && group.CreatorID != currentUserID {
+	if group.Privacy == GroupPrivacyPrivate && !group.IsJoined {
 		return nil, errors.New("not authorized to view this group")
 	}
 
@@ -151,17 +151,18 @@ func (s *GroupService) Update(group *Group) error {
 
 // Delete deletes a group
 func (s *GroupService) Delete(id, userID string) error {
-	// Check if user is the creator
-	var creatorID string
-	err := s.DB.QueryRow("SELECT creator_id FROM groups WHERE id = ?", id).Scan(&creatorID)
+	// Check if user is a group admin
+	var count int
+	err := s.DB.QueryRow(`
+		SELECT COUNT(*)
+		FROM group_members
+		WHERE group_id = ? AND user_id = ? AND (role = 'admin' OR role = 'creator') AND status = 'accepted'
+	`, id, userID).Scan(&count)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return errors.New("group not found")
-		}
-		return fmt.Errorf("failed to check group ownership: %w", err)
+		return fmt.Errorf("failed to check admin status: %w", err)
 	}
 
-	if creatorID != userID {
+	if count == 0 {
 		return errors.New("not authorized to delete this group")
 	}
 
@@ -180,13 +181,13 @@ func (s *GroupService) GetGroups(currentUserID string, limit, offset int) ([]*Gr
 		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
 			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0 as is_joined,
 			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		ORDER BY g.created_at DESC
 		LIMIT ? OFFSET ?
-	`, currentUserID, currentUserID, currentUserID, limit, offset)
+	`, currentUserID, currentUserID, limit, offset)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get groups: %w", err)
@@ -229,14 +230,14 @@ func (s *GroupService) SearchGroups(query string, currentUserID string, limit, o
 		SELECT g.id, g.name, g.description, g.creator_id, g.cover_photo, g.privacy, g.created_at, g.updated_at,
 			u.id, u.username, u.full_name, u.profile_picture,
 			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND status = 'accepted') as members_count,
-			(g.creator_id = ? OR (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0) as is_joined,
+			(SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND user_id = ? AND status = 'accepted') > 0 as is_joined,
 			(SELECT status FROM group_members WHERE group_id = g.id AND user_id = ? LIMIT 1) as request_status
 		FROM groups g
 		JOIN users u ON g.creator_id = u.id
 		WHERE (g.name LIKE ? OR g.description LIKE ?)
 		ORDER BY g.created_at DESC
 		LIMIT ? OFFSET ?
-	`, currentUserID, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", limit, offset)
+	`, currentUserID, currentUserID, "%"+query+"%", "%"+query+"%", limit, offset)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to search groups: %w", err)
