@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/bernaotieno/social-network/backend/pkg/models"
@@ -30,11 +32,20 @@ var Store *sessions.CookieStore
 // Initialize initializes the auth package
 func Initialize(secret []byte) {
 	Store = sessions.NewCookieStore(secret)
+
+	// Determine if we should use secure cookies based on environment
+	secureCookies := false
+	if secureEnv := os.Getenv("SECURE_COOKIES"); secureEnv != "" {
+		if parsed, err := strconv.ParseBool(secureEnv); err == nil {
+			secureCookies = parsed
+		}
+	}
+
 	Store.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   int(SessionDuration.Seconds()),
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   secureCookies, // Use environment variable for production
 		SameSite: http.SameSiteLaxMode,
 	}
 }
@@ -47,13 +58,13 @@ func CreateSession(ctx context.Context, db *sql.DB, userID string, w http.Respon
 // CreateSessionWithHub creates a new session for a user and optionally broadcasts session invalidation
 func CreateSessionWithHub(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request, hub SessionInvalidationBroadcaster) (string, error) {
 	sessionService := models.NewSessionService(db)
-	
+
 	// First, notify existing sessions that they will be invalidated (if hub is provided)
 	// This gives connected clients a chance to receive the message before sessions are deleted
 	if hub != nil {
 		log.Printf("Broadcasting session invalidation for user: %s", userID)
 		hub.BroadcastSessionInvalidation(userID)
-		
+
 		// Give a brief moment to ensure the WebSocket message is sent
 		// This is necessary because WebSocket sending is asynchronous
 		time.Sleep(50 * time.Millisecond)

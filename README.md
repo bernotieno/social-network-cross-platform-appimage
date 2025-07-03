@@ -128,6 +128,29 @@ A Facebook-like social network application with a Next.js frontend and Go backen
 
 4. Access the API at http://localhost:8080/api
 
+## Production Deployment
+
+For production deployment with your own domain, see the [Production Deployment Guide](PRODUCTION_DEPLOYMENT.md).
+
+**Quick production setup**:
+```bash
+# 1. Configure environment
+cp .env.production.template .env.production
+# Edit .env.production with your domain and settings
+
+# 2. Deploy
+./deploy-production.sh
+```
+
+**Key production features**:
+- Environment-based configuration
+- SSL/HTTPS support with nginx reverse proxy
+- Secure cookie settings
+- CORS protection
+- Production-optimized Docker builds
+- Automated deployment scripts
+- Database backup utilities
+
 ## API Documentation
 
 ### Authentication

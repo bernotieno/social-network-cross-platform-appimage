@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -75,8 +76,7 @@ func NewHandler(db *sql.DB, hub *websocket.Hub) *Handler {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow all origins in development
-				return true
+				return checkWebSocketOrigin(r)
 			},
 		},
 	}
@@ -420,4 +420,43 @@ func generateRoomID(userID1, userID2 string) string {
 	users := []string{userID1, userID2}
 	sort.Strings(users)
 	return strings.Join(users, "-")
+}
+
+// checkWebSocketOrigin validates WebSocket connection origins for production security
+func checkWebSocketOrigin(r *http.Request) bool {
+	// Get allowed origins from environment variable
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		// Default to localhost for development
+		return true
+	}
+
+	// Get the origin from the request
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// If no origin header, check the host header
+		host := r.Header.Get("Host")
+		if host != "" {
+			// Construct origin from host
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			origin = scheme + "://" + host
+		}
+	}
+
+	// Check if the origin is in the allowed list
+	if origin != "" {
+		origins := strings.Split(allowedOrigins, ",")
+		for _, allowedOrigin := range origins {
+			if strings.TrimSpace(allowedOrigin) == origin {
+				return true
+			}
+		}
+	}
+
+	// Log rejected origins for debugging
+	log.Printf("WebSocket connection rejected from origin: %s", origin)
+	return false
 }

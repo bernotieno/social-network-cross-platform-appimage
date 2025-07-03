@@ -49,9 +49,14 @@ func main() {
 	}
 	log.Println("Migrations completed successfully")
 
-	// Initialize auth package with a secret key
-	// In production, this should be a secure random key stored in environment variables
-	auth.Initialize([]byte("your-secret-key-here"))
+	// Initialize auth package with a secret key from environment variable
+	secretKey := os.Getenv("AUTH_SECRET_KEY")
+	if secretKey == "" {
+		// Default for development - in production, this should be set via environment variable
+		secretKey = "your-secret-key-here"
+		log.Println("Warning: Using default secret key. Set AUTH_SECRET_KEY environment variable for production.")
+	}
+	auth.Initialize([]byte(secretKey))
 
 	// Initialize WebSocket hub
 	hub := websocket.NewHub()
