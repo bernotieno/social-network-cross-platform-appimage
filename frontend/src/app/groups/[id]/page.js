@@ -239,6 +239,10 @@ export default function GroupPage() {
                 >
                   {isLeaving ? 'Leaving...' : 'Leave Group'}
                 </Button>
+              ) : group.privacy === 'private' ? (
+                <div className={styles.privateGroupMessage}>
+                  <span>🔒 Private Group - Invitation Only</span>
+                </div>
               ) : (
                 <Button
                   variant={group.requestStatus === 'pending' ? 'outline' : 'primary'}
@@ -326,15 +330,10 @@ export default function GroupPage() {
             <div className={styles.restrictedMessage}>
               <h3>This is a private group</h3>
               <p>You need to be a member to see posts and other content.</p>
-              <Button
-                variant={group.requestStatus === 'pending' ? 'outline' : 'primary'}
-                onClick={handleJoinGroup}
-                disabled={isJoining || group.requestStatus === 'pending'}
-              >
-                {isJoining ? 'Sending Request...' :
-                 group.requestStatus === 'pending' ? 'Request Sent' :
-                 group.requestStatus === 'rejected' ? 'Request Again' : 'Request to Join'}
-              </Button>
+              <div className={styles.privateGroupMessage}>
+                <span>🔒 Private Group - Invitation Only</span>
+                <p>Contact a group admin to request an invitation.</p>
+              </div>
             </div>
           </div>
         )}

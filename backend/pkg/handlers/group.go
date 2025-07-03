@@ -243,9 +243,14 @@ func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user is the group creator
-	if group.CreatorID != userID {
-		utils.RespondWithError(w, http.StatusForbidden, "Not authorized to update this group")
+	// Check if user is a group admin
+	isAdmin, err := h.GroupMemberService.IsGroupAdmin(groupID, userID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check admin status")
+		return
+	}
+	if !isAdmin {
+		utils.RespondWithError(w, http.StatusForbidden, "Only group admins can update this group")
 		return
 	}
 
@@ -400,6 +405,12 @@ func (h *Handler) JoinGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if group is private - private groups don't accept join requests
+	if group.Privacy == models.GroupPrivacyPrivate {
+		utils.RespondWithError(w, http.StatusForbidden, "Private groups do not accept join requests. You must be invited by a group admin.")
+		return
+	}
+
 	// Check if user is already a member or has a pending request
 	existingMember, err := h.GroupMemberService.GetByGroupAndUser(groupID, userID)
 	if err == nil {
@@ -505,15 +516,13 @@ func (h *Handler) LeaveGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user is the creator
-	if group.CreatorID == userID {
-		utils.RespondWithError(w, http.StatusBadRequest, "Group creator cannot leave the group. Delete the group instead.")
-		return
-	}
-
-	// Leave group
-	if err := h.GroupMemberService.Delete(groupID, userID); err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Failed to leave group")
+	// Handle leaving group for all user types (owner, admin, member)
+	if err := h.GroupMemberService.LeaveGroup(groupID, userID); err != nil {
+		if err.Error() == "user is not a member of this group" {
+			utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to leave group")
+		}
 		return
 	}
 
@@ -1021,19 +1030,18 @@ func (h *Handler) DeleteGroupEvent(w http.ResponseWriter, r *http.Request) {
 		canDelete = true
 	} else {
 		// For events created by others, check group permissions
-		group, err := h.GroupService.GetByID(existingEvent.GroupID, userID)
-		if err == nil {
-			if group.CreatorID == userID {
-				// Group creator can delete any event in their group
+		// Check if user is a group admin
+		groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(existingEvent.GroupID, userID)
+		if memberErr == nil && (groupMember.Role == models.GroupMemberRoleAdmin || groupMember.Role == models.GroupMemberRoleCreator) {
+			// Get the event creator's role
+			eventCreatorMember, creatorErr := h.GroupMemberService.GetByGroupAndUser(existingEvent.GroupID, existingEvent.CreatorID)
+			if creatorErr != nil {
+				// Event creator is not a group member, admin can delete
 				canDelete = true
 			} else {
-				// Check if user is a group admin
-				groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(group.ID, userID)
-				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin {
-					// Group admin can delete member events only, not creator events
-					if existingEvent.CreatorID != group.CreatorID {
-						canDelete = true
-					}
+				// Admins cannot delete other admins' events
+				if eventCreatorMember.Role != models.GroupMemberRoleAdmin && eventCreatorMember.Role != models.GroupMemberRoleCreator {
+					canDelete = true
 				}
 			}
 		}

@@ -152,15 +152,13 @@ func (s *GroupPostService) Delete(id, userID string) error {
 
 	// If not the author, check group permissions
 	var memberRole GroupMemberRole
-	var groupCreatorID string
 
-	// Get the role of the user in the group and the group's creator ID
+	// Get the role of the user in the group
 	err = s.DB.QueryRow(`
-		SELECT gm.role, g.creator_id
-		FROM group_members gm
-		JOIN groups g ON gm.group_id = g.id
-		WHERE gm.group_id = ? AND gm.user_id = ? AND gm.status = 'accepted'
-	`, groupID, userID).Scan(&memberRole, &groupCreatorID)
+		SELECT role
+		FROM group_members
+		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+	`, groupID, userID).Scan(&memberRole)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -169,18 +167,9 @@ func (s *GroupPostService) Delete(id, userID string) error {
 		return fmt.Errorf("failed to get group member role: %w", err)
 	}
 
-	// Group creator can delete any post
-	if userID == groupCreatorID {
-		_, err = s.DB.Exec("DELETE FROM group_posts WHERE id = ?", id)
-		if err != nil {
-			return fmt.Errorf("failed to delete group post: %w", err)
-		}
-		return nil
-	}
-
-	// Admin can delete any post except the creator's post
-	if memberRole == GroupMemberRoleAdmin {
-		// Get the author's role to ensure admin cannot delete creator's post
+	// Only admins can delete other members' posts
+	if memberRole == GroupMemberRoleAdmin || memberRole == GroupMemberRoleCreator {
+		// Get the author's role to ensure admin cannot delete other admin's posts
 		var postAuthorRole GroupMemberRole
 		err = s.DB.QueryRow(`
 			SELECT role
@@ -194,9 +183,9 @@ func (s *GroupPostService) Delete(id, userID string) error {
 			postAuthorRole = GroupMemberRoleMember
 		}
 
-		// If the post author is the creator, admin cannot delete it
-		if postAuthorID == groupCreatorID || postAuthorRole == GroupMemberRoleCreator {
-			return errors.New("admin cannot delete the group creator's post")
+		// Admins cannot delete other admins' posts
+		if postAuthorRole == GroupMemberRoleAdmin || postAuthorRole == GroupMemberRoleCreator {
+			return errors.New("admins cannot delete other admins' posts")
 		}
 
 		// Admin can delete the post if it's not the creator's

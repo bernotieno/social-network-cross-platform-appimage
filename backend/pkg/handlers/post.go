@@ -205,19 +205,18 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		canDelete = true
 	} else if post.GroupID.Valid && post.GroupID.String != "" {
 		// For group posts, check group-specific permissions
-		group, err := h.GroupService.GetByID(post.GroupID.String, userID)
-		if err == nil {
-			if group.CreatorID == userID {
-				// Group creator can delete any post in their group
+		// Check if user is a group admin
+		groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(post.GroupID.String, userID)
+		if memberErr == nil && (groupMember.Role == models.GroupMemberRoleAdmin || groupMember.Role == models.GroupMemberRoleCreator) {
+			// Get the post author's role
+			postAuthorMember, authorErr := h.GroupMemberService.GetByGroupAndUser(post.GroupID.String, post.UserID)
+			if authorErr != nil {
+				// Post author is not a group member, admin can delete
 				canDelete = true
 			} else {
-				// Check if user is a group admin
-				groupMember, memberErr := h.GroupMemberService.GetByGroupAndUser(group.ID, userID)
-				if memberErr == nil && groupMember.Role == models.GroupMemberRoleAdmin {
-					// Group admin can delete member posts only, not creator posts
-					if post.UserID != group.CreatorID {
-						canDelete = true
-					}
+				// Admins cannot delete other admins' posts
+				if postAuthorMember.Role != models.GroupMemberRoleAdmin && postAuthorMember.Role != models.GroupMemberRoleCreator {
+					canDelete = true
 				}
 			}
 		}

@@ -161,6 +161,27 @@
   text-decoration: none;
 }
 
+.privateGroupMessage {
+  text-align: center;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.privateGroupMessage span {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.privateGroupMessage p {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .groupsHeader {
     flex-direction: column;
