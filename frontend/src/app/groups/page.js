@@ -215,6 +215,10 @@ export default function Groups() {
                     >
                       Leave Group
                     </Button>
+                  ) : group.privacy === 'private' ? (
+                    <div className={styles.privateGroupMessage}>
+                      <span>🔒 Private Group - Invitation Only</span>
+                    </div>
                   ) : (
                     <Button
                       variant={group.requestStatus === 'pending' ? 'outline' : 'primary'}
