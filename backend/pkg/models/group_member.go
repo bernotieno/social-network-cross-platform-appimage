@@ -129,24 +129,30 @@ func (s *GroupMemberService) UpdateRole(id string, role GroupMemberRole) error {
 
 // PromoteToAdmin promotes a group member to admin
 func (s *GroupMemberService) PromoteToAdmin(groupID, memberID, callerID string) error {
-	// Get the group to check creator
-	var creatorID string
-	err := s.DB.QueryRow("SELECT creator_id FROM groups WHERE id = ?", groupID).Scan(&creatorID)
+	// Check if caller is a group admin
+	isAdmin, err := s.IsGroupAdmin(groupID, callerID)
+	if err != nil {
+		return fmt.Errorf("failed to check admin status: %w", err)
+	}
+	if !isAdmin {
+		return errors.New("only group admins can promote members")
+	}
+
+	// Check if the member to be promoted exists and is a regular member
+	var memberRole string
+	err = s.DB.QueryRow(`
+		SELECT role FROM group_members
+		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+	`, groupID, memberID).Scan(&memberRole)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return errors.New("group not found")
+			return errors.New("member not found in group")
 		}
-		return fmt.Errorf("failed to get group creator: %w", err)
+		return fmt.Errorf("failed to get member role: %w", err)
 	}
 
-	// Only the group creator can promote members
-	if creatorID != callerID {
-		return errors.New("only the group creator can promote members")
-	}
-
-	// Prevent promoting the group creator
-	if memberID == creatorID {
-		return errors.New("cannot promote the group creator")
+	if memberRole != string(GroupMemberRoleMember) {
+		return errors.New("can only promote regular members to admin")
 	}
 
 	// Update the member's role to admin
@@ -164,24 +170,35 @@ func (s *GroupMemberService) PromoteToAdmin(groupID, memberID, callerID string) 
 
 // DemoteFromAdmin demotes a group admin to a regular member
 func (s *GroupMemberService) DemoteFromAdmin(groupID, memberID, callerID string) error {
-	// Get the group to check creator
-	var creatorID string
-	err := s.DB.QueryRow("SELECT creator_id FROM groups WHERE id = ?", groupID).Scan(&creatorID)
+	// Check if caller is a group admin
+	isAdmin, err := s.IsGroupAdmin(groupID, callerID)
+	if err != nil {
+		return fmt.Errorf("failed to check admin status: %w", err)
+	}
+	if !isAdmin {
+		return errors.New("only group admins can demote members")
+	}
+
+	// Prevent self-demotion
+	if memberID == callerID {
+		return errors.New("cannot demote yourself")
+	}
+
+	// Check if the member to be demoted exists and is an admin
+	var memberRole string
+	err = s.DB.QueryRow(`
+		SELECT role FROM group_members
+		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+	`, groupID, memberID).Scan(&memberRole)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return errors.New("group not found")
+			return errors.New("member not found in group")
 		}
-		return fmt.Errorf("failed to get group creator: %w", err)
+		return fmt.Errorf("failed to get member role: %w", err)
 	}
 
-	// Only the group creator can demote admins
-	if creatorID != callerID {
-		return errors.New("only the group creator can demote admins")
-	}
-
-	// Prevent demoting the group creator
-	if memberID == creatorID {
-		return errors.New("cannot demote the group creator")
+	if memberRole != string(GroupMemberRoleAdmin) {
+		return errors.New("can only demote admin members")
 	}
 
 	// Update the member's role to member
@@ -199,14 +216,13 @@ func (s *GroupMemberService) DemoteFromAdmin(groupID, memberID, callerID string)
 
 // RemoveMember removes a member from a group based on roles
 func (s *GroupMemberService) RemoveMember(groupID, memberID, callerID string) error {
-	// Get the group to check creator
-	var creatorID string
-	err := s.DB.QueryRow("SELECT creator_id FROM groups WHERE id = ?", groupID).Scan(&creatorID)
+	// Check if caller is a group admin
+	isCallerAdmin, err := s.IsGroupAdmin(groupID, callerID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return errors.New("group not found")
-		}
-		return fmt.Errorf("failed to get group creator: %w", err)
+		return fmt.Errorf("failed to check caller admin status: %w", err)
+	}
+	if !isCallerAdmin {
+		return errors.New("only group admins can remove members")
 	}
 
 	// Get the member to be removed
@@ -215,38 +231,14 @@ func (s *GroupMemberService) RemoveMember(groupID, memberID, callerID string) er
 		return fmt.Errorf("member not found in group: %w", err)
 	}
 
-	// Get the caller's role
-	callerMember, err := s.GetByGroupAndUser(groupID, callerID)
-	// If caller is not a member, they can only remove if they are the creator
-	if err != nil && creatorID != callerID {
-		return errors.New("not authorized to remove members from this group")
+	// Prevent self-removal
+	if memberID == callerID {
+		return errors.New("cannot remove yourself from the group")
 	}
 
-	// Logic for removal:
-	// 1. Group creator can remove any member (including other admins).
-	// 2. Other admins can only remove regular members.
-
-	if creatorID == callerID {
-		// Creator can remove anyone
-		// Proceed to delete
-	} else if callerMember != nil && callerMember.Role == GroupMemberRoleAdmin {
-		// Admin can only remove regular members
-		if member.Role == GroupMemberRoleAdmin || member.Role == GroupMemberRoleMember {
-			// Admins cannot remove other admins or themselves if they are admin
-			if memberID == callerID {
-				return errors.New("admins cannot remove themselves")
-			}
-			// Admins can remove regular members
-			if member.Role == GroupMemberRoleMember {
-				// Proceed to delete
-			} else {
-				return errors.New("admins can only remove regular members")
-			}
-		} else {
-			return errors.New("admins can only remove regular members")
-		}
-	} else {
-		return errors.New("not authorized to remove members from this group")
+	// Admins can only remove regular members, not other admins
+	if member.Role == GroupMemberRoleAdmin || member.Role == GroupMemberRoleCreator {
+		return errors.New("admins cannot remove other admins")
 	}
 
 	// Delete the member
@@ -259,18 +251,11 @@ func (s *GroupMemberService) RemoveMember(groupID, memberID, callerID string) er
 }
 
 // Delete deletes a group member
-// This function is now a wrapper around RemoveMember to ensure role-based logic is applied.
-// The `callerID` for this function would typically be the user initiating the delete action.
-// For simplicity, if this function is called directly without a specific caller context,
-// it might imply an internal system operation or a creator-initiated removal.
-// However, for explicit role-based removal, `RemoveMember` should be used.
+// This function is now a wrapper around LeaveGroup for self-removal scenarios.
+// For admin-initiated removals, use RemoveMember instead.
 func (s *GroupMemberService) Delete(groupID, userID string) error {
-	// In a real application, you might need to pass the actual callerID here.
-	// For now, assuming the caller is the group creator or an authorized system process
-	// if this function is called directly.
-	// A more robust solution would involve refactoring handlers to call RemoveMember directly
-	// with the authenticated user's ID.
-	return s.RemoveMember(groupID, userID, "") // Placeholder for callerID, needs proper context
+	// This is typically used for self-removal (leaving group)
+	return s.LeaveGroup(groupID, userID)
 }
 
 // GetMembers retrieves members of a group
@@ -385,12 +370,9 @@ func (s *GroupMemberService) IsGroupAdmin(groupID, userID string) (bool, error) 
 	var count int
 	err := s.DB.QueryRow(`
 		SELECT COUNT(*)
-		FROM (
-			SELECT 1 FROM groups WHERE id = ? AND creator_id = ?
-			UNION
-			SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND role = 'admin' AND status = 'accepted'
-		) AS admin_check
-	`, groupID, userID, groupID, userID).Scan(&count)
+		FROM group_members
+		WHERE group_id = ? AND user_id = ? AND (role = 'admin' OR role = 'creator') AND status = 'accepted'
+	`, groupID, userID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if user is admin: %w", err)
 	}
@@ -403,12 +385,9 @@ func (s *GroupMemberService) IsGroupMember(groupID, userID string) (bool, error)
 	var count int
 	err := s.DB.QueryRow(`
 		SELECT COUNT(*)
-		FROM (
-			SELECT 1 FROM groups WHERE id = ? AND creator_id = ?
-			UNION
-			SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'accepted'
-		) AS membership
-	`, groupID, userID, groupID, userID).Scan(&count)
+		FROM group_members
+		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+	`, groupID, userID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if user is member: %w", err)
 	}
@@ -503,4 +482,169 @@ func (s *GroupMemberService) GetGroupAdmins(groupID string) ([]*GroupMember, err
 	}
 
 	return admins, nil
+}
+
+// GetMemberWithMostPosts finds the group member with the most posts
+func (s *GroupMemberService) GetMemberWithMostPosts(groupID string) (*GroupMember, error) {
+	member := &GroupMember{User: &User{}}
+
+	err := s.DB.QueryRow(`
+		SELECT gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.created_at, gm.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture,
+			COUNT(gp.id) as post_count
+		FROM group_members gm
+		JOIN users u ON gm.user_id = u.id
+		LEFT JOIN group_posts gp ON gm.user_id = gp.user_id AND gm.group_id = gp.group_id
+		WHERE gm.group_id = ? AND gm.status = 'accepted' AND gm.role = 'member'
+		GROUP BY gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.created_at, gm.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture
+		ORDER BY post_count DESC, gm.created_at ASC
+		LIMIT 1
+	`, groupID).Scan(
+		&member.ID, &member.GroupID, &member.UserID, &member.Role, &member.Status, &member.CreatedAt, &member.UpdatedAt,
+		&member.User.ID, &member.User.Username, &member.User.FullName, &member.User.ProfilePicture,
+		new(int), // post_count - we don't need to store this
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("no eligible members found")
+		}
+		return nil, fmt.Errorf("failed to get member with most posts: %w", err)
+	}
+
+	return member, nil
+}
+
+// TransferOwnership handles transferring group ownership when the creator leaves
+func (s *GroupMemberService) TransferOwnership(groupID, leavingCreatorID string) error {
+	// Start a transaction
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Remove the creator from group_members table
+	_, err = tx.Exec("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupID, leavingCreatorID)
+	if err != nil {
+		return fmt.Errorf("failed to remove creator from group members: %w", err)
+	}
+
+	// Check if there are any existing admins
+	var adminCount int
+	err = tx.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_id = ? AND role = 'admin' AND status = 'accepted'", groupID).Scan(&adminCount)
+	if err != nil {
+		return fmt.Errorf("failed to count admins: %w", err)
+	}
+
+	// If no admins exist, promote the member with the most posts
+	if adminCount == 0 {
+		// Find member with most posts using a transaction-aware query
+		var newAdminID string
+		err = tx.QueryRow(`
+			SELECT gm.user_id
+			FROM group_members gm
+			LEFT JOIN group_posts gp ON gm.user_id = gp.user_id AND gm.group_id = gp.group_id
+			WHERE gm.group_id = ? AND gm.status = 'accepted' AND gm.role = 'member'
+			GROUP BY gm.user_id
+			ORDER BY COUNT(gp.id) DESC, gm.created_at ASC
+			LIMIT 1
+		`, groupID).Scan(&newAdminID)
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				// No members left, group becomes ownerless but remains active
+				return tx.Commit()
+			}
+			return fmt.Errorf("failed to find member to promote: %w", err)
+		}
+
+		// Promote the selected member to admin
+		_, err = tx.Exec(`
+			UPDATE group_members
+			SET role = ?, updated_at = ?
+			WHERE group_id = ? AND user_id = ?
+		`, GroupMemberRoleAdmin, time.Now(), groupID, newAdminID)
+		if err != nil {
+			return fmt.Errorf("failed to promote member to admin: %w", err)
+		}
+	}
+
+	// Commit the transaction
+	return tx.Commit()
+}
+
+// LeaveGroup handles a user leaving a group with proper admin succession logic
+func (s *GroupMemberService) LeaveGroup(groupID, userID string) error {
+	// Start a transaction
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Get the user's current role in the group
+	var userRole string
+	err = tx.QueryRow(`
+		SELECT role FROM group_members
+		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+	`, groupID, userID).Scan(&userRole)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("user is not a member of this group")
+		}
+		return fmt.Errorf("failed to get user role: %w", err)
+	}
+
+	// Remove the user from the group
+	_, err = tx.Exec("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", groupID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to remove user from group: %w", err)
+	}
+
+	// If the leaving user was an admin or creator, check if we need to assign a new admin
+	if userRole == string(GroupMemberRoleAdmin) || userRole == string(GroupMemberRoleCreator) {
+		// Count remaining admins
+		var adminCount int
+		err = tx.QueryRow(`
+			SELECT COUNT(*) FROM group_members
+			WHERE group_id = ? AND (role = 'admin' OR role = 'creator') AND status = 'accepted'
+		`, groupID).Scan(&adminCount)
+		if err != nil {
+			return fmt.Errorf("failed to count remaining admins: %w", err)
+		}
+
+		// If no admins remain, promote the earliest member
+		if adminCount == 0 {
+			var newAdminID string
+			err = tx.QueryRow(`
+				SELECT user_id FROM group_members
+				WHERE group_id = ? AND status = 'accepted' AND role = 'member'
+				ORDER BY created_at ASC
+				LIMIT 1
+			`, groupID).Scan(&newAdminID)
+
+			if err != nil {
+				if err == sql.ErrNoRows {
+					// No members left, group becomes ownerless but remains active
+					return tx.Commit()
+				}
+				return fmt.Errorf("failed to find member to promote: %w", err)
+			}
+
+			// Promote the earliest member to admin
+			_, err = tx.Exec(`
+				UPDATE group_members
+				SET role = ?, updated_at = ?
+				WHERE group_id = ? AND user_id = ?
+			`, GroupMemberRoleAdmin, time.Now(), groupID, newAdminID)
+			if err != nil {
+				return fmt.Errorf("failed to promote member to admin: %w", err)
+			}
+		}
+	}
+
+	// Commit the transaction
+	return tx.Commit()
 }
