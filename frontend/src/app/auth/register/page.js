@@ -52,6 +52,32 @@ export default function Register() {
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        setErrors(prev => ({
+          ...prev,
+          avatar: 'Please select a valid image file (JPEG, PNG, or GIF)'
+        }));
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (file.size > maxSize) {
+        setErrors(prev => ({
+          ...prev,
+          avatar: 'Image file size must be less than 5MB. Current size: ' + (file.size / (1024 * 1024)).toFixed(1) + 'MB'
+        }));
+        return;
+      }
+
+      // Clear any previous avatar errors
+      setErrors(prev => ({
+        ...prev,
+        avatar: ''
+      }));
+
       setAvatar(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -65,15 +91,19 @@ export default function Register() {
     const newErrors = {};
 
     if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
+      newErrors.username = 'Username is required - please enter a username or nickname';
     } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
+      newErrors.username = 'Username must be at least 3 characters long';
+    } else if (formData.username.length > 30) {
+      newErrors.username = 'Username cannot exceed 30 characters';
+    } else if (!/^[a-zA-Z0-9_.-]+$/.test(formData.username)) {
+      newErrors.username = 'Username can only contain letters, numbers, underscores, dots, and hyphens';
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+      newErrors.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address (e.g., user@example.com)';
     }
 
     if (!formData.password) {
@@ -88,28 +118,51 @@ export default function Register() {
 
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
+    } else if (formData.firstName.trim().length < 2) {
+      newErrors.firstName = 'First name must be at least 2 characters';
+    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.firstName)) {
+      newErrors.firstName = 'First name can only contain letters, spaces, apostrophes, and hyphens';
     }
 
     if (!formData.lastName.trim()) {
       newErrors.lastName = 'Last name is required';
+    } else if (formData.lastName.trim().length < 2) {
+      newErrors.lastName = 'Last name must be at least 2 characters';
+    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.lastName)) {
+      newErrors.lastName = 'Last name can only contain letters, spaces, apostrophes, and hyphens';
     }
 
     if (!formData.dateOfBirth) {
       newErrors.dateOfBirth = 'Date of birth is required';
     } else {
-      // Validate age (must be at least 13 years old)
       const birthDate = new Date(formData.dateOfBirth);
       const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
+      
+      // Check if date is valid
+      if (isNaN(birthDate.getTime())) {
+        newErrors.dateOfBirth = 'Please enter a valid date';
+      } else if (birthDate > today) {
+        newErrors.dateOfBirth = 'Date of birth cannot be in the future';
+      } else {
+        // Calculate age more accurately
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        
+        if (age < 13) {
+          newErrors.dateOfBirth = 'You must be at least 13 years old to register (current age: ' + age + ')';
+        } else if (age > 120) {
+          newErrors.dateOfBirth = 'Please enter a valid birth date';
+        }
       }
+    }
 
-      if (age < 13) {
-        newErrors.dateOfBirth = 'You must be at least 13 years old to register';
-      }
+    // Validate bio if provided
+    if (formData.bio && formData.bio.length > 500) {
+      newErrors.bio = 'Bio cannot exceed 500 characters (' + formData.bio.length + '/500)';
     }
 
     setErrors(newErrors);
@@ -150,10 +203,30 @@ export default function Register() {
       if (result.success) {
         router.push('/');
       } else {
-        setRegisterError(result.error);
+        // Parse and display more specific error messages
+        const errorMessage = result.error;
+        
+        // Map server errors to more user-friendly messages
+        if (errorMessage.includes('email or username already exists')) {
+          setRegisterError('An account with this email or username already exists. Please try a different email or username.');
+        } else if (errorMessage.includes('Invalid email format')) {
+          setRegisterError('Please enter a valid email address.');
+        } else if (errorMessage.includes('Password must be at least 6 characters')) {
+          setRegisterError('Password must be at least 6 characters long.');
+        } else if (errorMessage.includes('Invalid date of birth format')) {
+          setRegisterError('Please enter a valid date of birth in the format YYYY-MM-DD.');
+        } else if (errorMessage.includes('Failed to save avatar')) {
+          setRegisterError('There was an issue uploading your profile picture. Please try a different image or continue without one.');
+        } else if (errorMessage.includes('Failed to create user')) {
+          setRegisterError('There was an issue creating your account. Please try again in a few moments.');
+        } else if (errorMessage.includes('required')) {
+          setRegisterError('Please fill in all required fields correctly.');
+        } else {
+          setRegisterError(errorMessage || 'Registration failed. Please check your information and try again.');
+        }
       }
     } catch (error) {
-      setRegisterError('An unexpected error occurred. Please try again.');
+      setRegisterError('An unexpected error occurred. Please check your internet connection and try again.');
       console.error('Registration error:', error);
     } finally {
       setIsSubmitting(false);
