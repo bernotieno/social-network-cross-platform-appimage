@@ -229,7 +229,7 @@
   }
 }
 
-.profileDropdown:hover .dropdownContent {
+.dropdownContent.active {
   display: block;
 }
 
