@@ -46,3 +46,5 @@ EXPOSE 8080
 
 # Run the application
 CMD ["./social-network-backend", "-port", "8080", "-db", "/app/data/social_network.db", "-migrations", "/app/pkg/db/migrations/sqlite"]
+
+
