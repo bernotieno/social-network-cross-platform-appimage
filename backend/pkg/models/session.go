@@ -86,14 +86,14 @@ func (s *SessionService) Delete(id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		log.Printf("Warning: Could not get rows affected for session deletion: %v", err)
 	} else {
 		log.Printf("Deleted session %s, rows affected: %d", id, rowsAffected)
 	}
-	
+
 	return nil
 }
 
@@ -103,14 +103,14 @@ func (s *SessionService) DeleteAllForUser(userID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete user sessions: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		log.Printf("Warning: Could not get rows affected for user session deletion: %v", err)
 	} else {
 		log.Printf("Deleted all sessions for user %s, rows affected: %d", userID, rowsAffected)
 	}
-	
+
 	return nil
 }
 
@@ -120,14 +120,14 @@ func (s *SessionService) CleanupExpiredSessions() error {
 	if err != nil {
 		return fmt.Errorf("failed to cleanup expired sessions: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		log.Printf("Warning: Could not get rows affected for expired session cleanup: %v", err)
 	} else {
 		log.Printf("Cleaned up expired sessions, rows affected: %d", rowsAffected)
 	}
-	
+
 	return nil
 }
 
@@ -150,8 +150,8 @@ func (s *SessionService) IsLatestSession(userID string, sessionID string) (bool,
 	}
 
 	isLatest := latestSessionID == sessionID
-	log.Printf("Session validation check - User: %s, Current: %s, Latest: %s, IsLatest: %v", 
+	log.Printf("Session validation check - User: %s, Current: %s, Latest: %s, IsLatest: %v",
 		userID, sessionID, latestSessionID, isLatest)
-	
+
 	return isLatest, nil
 }
