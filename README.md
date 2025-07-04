@@ -71,62 +71,23 @@ A Facebook-like social network application with a Next.js frontend and Go backen
 - Node.js (for local development)
 - Go (for local development)
 
-### Running with Docker
+### Running Application
 
 1. Clone the repository:
    ```bash
    git clone https://github.com/bernotieno/social-network.git
    cd social-network
    ```
-
-2. Start the application with Docker Compose:
+2. Run the makefile:
+ - For Backend:
    ```bash
-   docker-compose up
+   make run
    ```
-
-3. Access the application:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8080/api
-
-### Local Development
-
-#### Frontend
-
-1. Navigate to the frontend directory:
+ - For Frontend:
    ```bash
-   cd frontend
+   make frontend
    ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-4. Access the frontend at http://localhost:3000
-
-#### Backend
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Install dependencies:
-   ```bash
-   go mod download
-   ```
-
-3. Run the server:
-   ```bash
-   go run server.go
-   ```
-
-4. Access the API at http://localhost:8080/api
+3. Access the frontend at http://localhost:3000
 
 ## API Documentation
 
