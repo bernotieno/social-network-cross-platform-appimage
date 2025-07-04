@@ -253,7 +253,7 @@ func (h *Hub) broadcastTypingStatus(roomID, userID string, isTyping bool) {
 // BroadcastSessionInvalidation notifies a user that their session has been invalidated
 func (h *Hub) BroadcastSessionInvalidation(userID string) {
 	log.Printf("BroadcastSessionInvalidation called for user: %s", userID)
-	
+
 	message := map[string]interface{}{
 		"type": "session_invalidated",
 		"payload": map[string]interface{}{
@@ -269,7 +269,7 @@ func (h *Hub) BroadcastSessionInvalidation(userID string) {
 	}
 
 	log.Printf("Looking for online user %s in %d online users", userID, len(h.OnlineUsers))
-	
+
 	// Send to the specific user if they're online
 	if client, ok := h.OnlineUsers[userID]; ok {
 		log.Printf("Found online user %s, attempting to send session invalidation message", userID)
