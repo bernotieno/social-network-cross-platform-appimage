@@ -133,26 +133,43 @@ func (s *CommentService) Delete(id, userID string) error {
 
 // GetCommentsByPost retrieves all comments for a post
 func (s *CommentService) GetCommentsByPost(postID string, currentUserID string, limit, offset int) ([]*Comment, error) {
-	// Check if the post exists in the regular posts table
+	// First, check if the post exists in the regular posts table
 	var postUserID string
 	var postVisibility PostVisibility
 	err := s.DB.QueryRow(
 		"SELECT user_id, visibility FROM posts WHERE id = ?",
 		postID,
 	).Scan(&postUserID, &postVisibility)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, errors.New("post not found for comments")
-		}
-		log.Printf("GetCommentsByPost: Error checking post %s: %v", postID, err)
-		return nil, fmt.Errorf("failed to check post: %w", err)
-	}
+			// Post not found in regular posts table, check group_posts table
+			var groupPostUserID string
+			err = s.DB.QueryRow(
+				"SELECT user_id FROM group_posts WHERE id = ?",
+				postID,
+			).Scan(&groupPostUserID)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					return nil, errors.New("post not found for comments")
+				}
+				log.Printf("GetCommentsByPost: Error checking group post %s: %v", postID, err)
+				return nil, fmt.Errorf("failed to check group post: %w", err)
+			}
 
-	// Check if user can view this post's comments
-	if postVisibility == PostVisibilityPrivate && postUserID != currentUserID {
-		return nil, errors.New("not authorized to view comments on this private post")
+			// For group posts, we don't need to check visibility here as it's handled by the group membership check in the handler
+			// Just proceed to get the comments
+		} else {
+			log.Printf("GetCommentsByPost: Error checking post %s: %v", postID, err)
+			return nil, fmt.Errorf("failed to check post: %w", err)
+		}
+	} else {
+		// Regular post found, check if user can view this post's comments
+		if postVisibility == PostVisibilityPrivate && postUserID != currentUserID {
+			return nil, errors.New("not authorized to view comments on this private post")
+		}
+		// Add more visibility checks if needed (e.g., followers only)
 	}
-	// Add more visibility checks if needed (e.g., followers only)
 
 	rows, err := s.DB.Query(`
 		SELECT c.id, c.post_id, c.user_id, c.content, c.image, c.created_at, c.updated_at,
