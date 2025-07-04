@@ -47,13 +47,13 @@ func CreateSession(ctx context.Context, db *sql.DB, userID string, w http.Respon
 // CreateSessionWithHub creates a new session for a user and optionally broadcasts session invalidation
 func CreateSessionWithHub(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter, r *http.Request, hub SessionInvalidationBroadcaster) (string, error) {
 	sessionService := models.NewSessionService(db)
-	
+
 	// First, notify existing sessions that they will be invalidated (if hub is provided)
 	// This gives connected clients a chance to receive the message before sessions are deleted
 	if hub != nil {
 		log.Printf("Broadcasting session invalidation for user: %s", userID)
 		hub.BroadcastSessionInvalidation(userID)
-		
+
 		// Give a brief moment to ensure the WebSocket message is sent
 		// This is necessary because WebSocket sending is asynchronous
 		time.Sleep(50 * time.Millisecond)
