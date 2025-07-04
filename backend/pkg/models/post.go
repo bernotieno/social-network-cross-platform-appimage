@@ -180,7 +180,7 @@ func (s *PostService) Delete(id, userID string) error {
 	return nil
 }
 
-// GetUserPosts retrieves posts by a user
+// GetUserPosts retrieves posts by a user with proper visibility filtering
 func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset int) ([]*Post, error) {
 	// First, check if the user has a private profile
 	var isPrivate bool
@@ -197,30 +197,9 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 		currentUserID = "00000000-0000-0000-0000-000000000000" // Use a dummy UUID that won't match any real user
 	}
 
-	// If user is viewing their own posts or the profile is public, proceed normally
-	if userID == currentUserID || !isPrivate {
-		// User can see all their own posts or public profile posts
-		rows, err := s.DB.Query(`
-			SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
-				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
-				(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
-				COALESCE((SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?), 0) as is_liked
-			FROM posts p
-			JOIN users u ON p.user_id = u.id
-			WHERE p.user_id = ?
-			ORDER BY p.created_at DESC
-			LIMIT ? OFFSET ?
-		`, currentUserID, userID, limit, offset)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user posts: %w", err)
-		}
-		defer rows.Close()
-
-		return s.scanPosts(rows)
-	} else {
-		// For private profiles, check if the current user is a follower
-		var isFollowing bool
+	// Check if the current user is following the profile owner
+	var isFollowing bool
+	if currentUserID != userID && currentUserID != "00000000-0000-0000-0000-000000000000" {
 		err := s.DB.QueryRow(`
 			SELECT COUNT(*) > 0
 			FROM follows
@@ -229,32 +208,64 @@ func (s *PostService) GetUserPosts(userID, currentUserID string, limit, offset i
 		if err != nil {
 			return nil, fmt.Errorf("failed to check follow status: %w", err)
 		}
-
-		if !isFollowing {
-			// Not a follower, return empty list or error based on your preference
-			return []*Post{}, nil // Or return nil, errors.New("not authorized to view posts")
-		}
-
-		// Is a follower, can see posts
-		rows, err := s.DB.Query(`
-			SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
-				u.id, u.username, u.full_name, u.profile_picture,
-				(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
-				(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
-				COALESCE((SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?), 0) as is_liked
-			FROM posts p
-			JOIN users u ON p.user_id = u.id
-			WHERE p.user_id = ?
-			ORDER BY p.created_at DESC
-			LIMIT ? OFFSET ?
-		`, currentUserID, userID, limit, offset)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user posts: %w", err)
-		}
-		defer rows.Close()
-
-		return s.scanPosts(rows)
 	}
+
+	// If viewing someone else's private profile and not following, return empty
+	if userID != currentUserID && isPrivate && !isFollowing {
+		return []*Post{}, nil
+	}
+
+	// Build the WHERE clause for post visibility filtering
+	var whereClause string
+	var args []interface{}
+
+	if userID == currentUserID {
+		// User viewing their own posts - can see all posts
+		whereClause = "WHERE p.user_id = ?"
+		args = []interface{}{currentUserID, userID, limit, offset}
+	} else {
+		// User viewing someone else's posts - apply visibility filtering
+		whereClause = `WHERE p.user_id = ? AND (
+			-- Public posts are always visible
+			p.visibility = 'public'
+			-- Followers-only posts are visible if the viewer is following
+			OR (p.visibility = 'followers' AND ? = 'true')
+			-- Custom posts are visible if the viewer is in the viewers list
+			OR (p.visibility = 'custom' AND p.id IN (
+				SELECT post_id FROM post_viewers WHERE user_id = ?
+			))
+		) AND p.visibility != 'private'`
+
+		// Convert boolean to string for SQL
+		isFollowingStr := "false"
+		if isFollowing {
+			isFollowingStr = "true"
+		}
+
+		args = []interface{}{currentUserID, userID, isFollowingStr, currentUserID, limit, offset}
+	}
+
+	// Execute the query with proper visibility filtering
+	query := fmt.Sprintf(`
+		SELECT p.id, p.user_id, p.content, p.image, p.visibility, p.created_at, p.updated_at,
+			u.id, u.username, u.full_name, u.profile_picture,
+			(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+			(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+			COALESCE((SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?), 0) as is_liked
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		%s
+		ORDER BY p.created_at DESC
+		LIMIT ? OFFSET ?
+	`, whereClause)
+
+	rows, err := s.DB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user posts: %w", err)
+	}
+	defer rows.Close()
+
+	return s.scanPosts(rows)
 }
 
 // Helper method to scan posts from rows
@@ -322,10 +333,11 @@ func (s *PostService) GetFeed(userID string, limit, offset int) ([]*Post, error)
 			OR (p.visibility = ? AND p.id IN (
 				SELECT post_id FROM post_viewers WHERE user_id = ?
 			))
-			-- Note: Private posts are only visible to the owner (handled by first condition)
+		-- Explicitly exclude private posts from other users
+		AND (p.user_id = ? OR p.visibility != 'private')
 		ORDER BY p.created_at DESC
 		LIMIT ? OFFSET ?
-	`, userID, userID, PostVisibilityPublic, userID, PostVisibilityFollowers, userID, PostVisibilityPublic, userID, PostVisibilityCustom, userID, limit, offset)
+	`, userID, userID, PostVisibilityPublic, userID, PostVisibilityFollowers, userID, PostVisibilityPublic, userID, PostVisibilityCustom, userID, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feed: %w", err)
 	}
