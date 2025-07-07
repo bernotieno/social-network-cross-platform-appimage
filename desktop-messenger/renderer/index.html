@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss: http: https:;">
+    <title>Social Network Messenger</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3498db">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SN Messenger">
+</head>
+<body>
+    <div id="app">
+        <!-- Loading screen -->
+        <div id="loading-screen" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <p>Loading Social Network Messenger...</p>
+        </div>
+
+        <!-- Login screen -->
+        <div id="login-screen" class="screen" style="display: none;">
+            <div class="login-container">
+                <div class="login-header">
+                    <h1>Social Network Messenger</h1>
+                    <p>Sign in to start messaging</p>
+                </div>
+                
+                <form id="login-form" class="login-form">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="login-btn">
+                        Sign In
+                    </button>
+                    
+                    <div class="login-footer">
+                        <p>Don't have an account? 
+                            <a href="#" id="register-link">Create one on our website</a>
+                        </p>
+                    </div>
+                </form>
+                
+                <div id="login-error" class="error-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Main chat screen -->
+        <div id="chat-screen" class="screen" style="display: none;">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div class="user-info">
+                        <img id="user-avatar" class="user-avatar" src="" alt="User Avatar">
+                        <div class="user-details">
+                            <h3 id="user-name">User Name</h3>
+                            <p id="user-status" class="user-status">Online</p>
+                        </div>
+                    </div>
+                    <div class="sidebar-actions">
+                        <button id="logout-btn" class="btn btn-secondary" title="Logout">
+                            <span>⚙️</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="search-container">
+                    <input type="text" id="search-input" placeholder="Search conversations..." class="search-input">
+                </div>
+                
+                <div class="contacts-list" id="contacts-list">
+                    <!-- Contacts will be populated here -->
+                </div>
+            </div>
+
+            <!-- Main chat area -->
+            <div class="main-chat">
+                <div id="no-chat-selected" class="no-chat-selected">
+                    <h2>Welcome to Social Network Messenger</h2>
+                    <p>Select a contact to start chatting</p>
+                </div>
+                
+                <div id="chat-container" class="chat-container" style="display: none;">
+                    <!-- Chat header -->
+                    <div class="chat-header">
+                        <div class="contact-info">
+                            <img id="contact-avatar" class="contact-avatar" src="" alt="Contact Avatar">
+                            <div class="contact-details">
+                                <h3 id="contact-name">Contact Name</h3>
+                                <p id="contact-status" class="contact-status">Online</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Messages area -->
+                    <div class="messages-container" id="messages-container">
+                        <div class="messages-list" id="messages-list">
+                            <!-- Messages will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Message input -->
+                    <div class="message-input-container">
+                        <div class="offline-indicator" id="offline-indicator" style="display: none;">
+                            <p>⚠️ You're offline. Messages will be sent when you're back online.</p>
+                        </div>
+                        
+                        <form id="message-form" class="message-form">
+                            <div class="input-group">
+                                <button type="button" id="emoji-btn" class="btn btn-icon" title="Add emoji">
+                                    😊
+                                </button>
+                                <input type="text" id="message-input" placeholder="Type a message..." class="message-input" autocomplete="off">
+                                <button type="submit" id="send-btn" class="btn btn-primary">
+                                    Send
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div id="emoji-picker" class="emoji-picker" style="display: none;">
+                            <!-- Emoji picker will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Offline notification -->
+        <div id="offline-notification" class="offline-notification" style="display: none;">
+            <p>⚠️ No internet connection</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="scripts/web-compat.js"></script>
+    <script src="scripts/utils.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/chat.js"></script>
+    <script src="scripts/storage.js"></script>
+    <script src="scripts/websocket.js"></script>
+    <script src="scripts/main.js"></script>
+</body>
+</html>
