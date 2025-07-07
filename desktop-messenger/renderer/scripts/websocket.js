@@ -116,7 +116,9 @@ class WebSocketManager {
         this.currentRoomId = roomId;
         this.send({
             type: 'join_room',
-            roomId: roomId
+            payload: {
+                roomId: roomId
+            }
         });
         console.log('Joined room:', roomId);
     }
@@ -127,21 +129,22 @@ class WebSocketManager {
         }
         this.send({
             type: 'leave_room',
-            roomId: roomId
+            payload: {
+                roomId: roomId
+            }
         });
         console.log('Left room:', roomId);
     }
 
     sendMessage(roomId, content) {
         const message = {
-            type: 'message',
-            roomId: roomId,
-            content: {
-                content: content,
-                timestamp: new Date().toISOString()
+            type: 'chat_message',
+            payload: {
+                roomId: roomId,
+                content: content
             }
         };
-        
+
         this.send(message);
         console.log('Sent message:', message);
     }
