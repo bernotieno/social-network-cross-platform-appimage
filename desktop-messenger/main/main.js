@@ -246,9 +246,31 @@ function setupIpcHandlers() {
   // Storage handlers
   ipcMain.handle('storage:setItem', async (event, key, value) => {
     try {
-      const Store = require('electron-store');
-      const store = new Store();
-      store.set(key, value);
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const storageFile = path.join(userDataPath, 'storage.json');
+
+      // Ensure directory exists
+      if (!fs.existsSync(userDataPath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+      }
+
+      // Read existing data or create new
+      let storage = {};
+      if (fs.existsSync(storageFile)) {
+        try {
+          const data = fs.readFileSync(storageFile, 'utf8');
+          storage = JSON.parse(data);
+        } catch (parseError) {
+          console.warn('Could not parse existing storage, creating new file');
+          storage = {};
+        }
+      }
+
+      // Set the value
+      storage[key] = value;
+      fs.writeFileSync(storageFile, JSON.stringify(storage, null, 2));
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -257,9 +279,17 @@ function setupIpcHandlers() {
 
   ipcMain.handle('storage:getItem', async (event, key) => {
     try {
-      const Store = require('electron-store');
-      const store = new Store();
-      return store.get(key);
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const storageFile = path.join(userDataPath, 'storage.json');
+
+      if (fs.existsSync(storageFile)) {
+        const data = fs.readFileSync(storageFile, 'utf8');
+        const storage = JSON.parse(data);
+        return storage[key];
+      }
+      return null;
     } catch (error) {
       return null;
     }
@@ -267,9 +297,17 @@ function setupIpcHandlers() {
 
   ipcMain.handle('storage:removeItem', async (event, key) => {
     try {
-      const Store = require('electron-store');
-      const store = new Store();
-      store.delete(key);
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const storageFile = path.join(userDataPath, 'storage.json');
+
+      if (fs.existsSync(storageFile)) {
+        const data = fs.readFileSync(storageFile, 'utf8');
+        const storage = JSON.parse(data);
+        delete storage[key];
+        fs.writeFileSync(storageFile, JSON.stringify(storage, null, 2));
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -278,9 +316,14 @@ function setupIpcHandlers() {
 
   ipcMain.handle('storage:clear', async (event) => {
     try {
-      const Store = require('electron-store');
-      const store = new Store();
-      store.clear();
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const storageFile = path.join(userDataPath, 'storage.json');
+
+      if (fs.existsSync(storageFile)) {
+        fs.unlinkSync(storageFile);
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -291,10 +334,32 @@ function setupIpcHandlers() {
   ipcMain.handle('secureStorage:setItem', async (event, key, value) => {
     try {
       if (safeStorage.isEncryptionAvailable()) {
+        const fs = require('fs');
+        const path = require('path');
+        const userDataPath = app.getPath('userData');
+        const secureStorageFile = path.join(userDataPath, 'secure-storage.json');
+
+        // Ensure directory exists
+        if (!fs.existsSync(userDataPath)) {
+          fs.mkdirSync(userDataPath, { recursive: true });
+        }
+
+        // Read existing data or create new
+        let secureStorage = {};
+        if (fs.existsSync(secureStorageFile)) {
+          try {
+            const data = fs.readFileSync(secureStorageFile, 'utf8');
+            secureStorage = JSON.parse(data);
+          } catch (parseError) {
+            console.warn('Could not parse existing secure storage, creating new file');
+            secureStorage = {};
+          }
+        }
+
+        // Encrypt and store the value
         const encryptedValue = safeStorage.encryptString(JSON.stringify(value));
-        const Store = require('electron-store');
-        const store = new Store({ name: 'secure' });
-        store.set(key, encryptedValue.toString('base64'));
+        secureStorage[key] = encryptedValue.toString('base64');
+        fs.writeFileSync(secureStorageFile, JSON.stringify(secureStorage, null, 2));
         return { success: true };
       }
       return { success: false, error: 'Encryption not available' };
@@ -306,13 +371,20 @@ function setupIpcHandlers() {
   ipcMain.handle('secureStorage:getItem', async (event, key) => {
     try {
       if (safeStorage.isEncryptionAvailable()) {
-        const Store = require('electron-store');
-        const store = new Store({ name: 'secure' });
-        const encryptedValue = store.get(key);
-        if (encryptedValue) {
-          const buffer = Buffer.from(encryptedValue, 'base64');
-          const decryptedValue = safeStorage.decryptString(buffer);
-          return JSON.parse(decryptedValue);
+        const fs = require('fs');
+        const path = require('path');
+        const userDataPath = app.getPath('userData');
+        const secureStorageFile = path.join(userDataPath, 'secure-storage.json');
+
+        if (fs.existsSync(secureStorageFile)) {
+          const data = fs.readFileSync(secureStorageFile, 'utf8');
+          const secureStorage = JSON.parse(data);
+          const encryptedValue = secureStorage[key];
+          if (encryptedValue) {
+            const buffer = Buffer.from(encryptedValue, 'base64');
+            const decryptedValue = safeStorage.decryptString(buffer);
+            return JSON.parse(decryptedValue);
+          }
         }
       }
       return null;
@@ -323,9 +395,17 @@ function setupIpcHandlers() {
 
   ipcMain.handle('secureStorage:removeItem', async (event, key) => {
     try {
-      const Store = require('electron-store');
-      const store = new Store({ name: 'secure' });
-      store.delete(key);
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const secureStorageFile = path.join(userDataPath, 'secure-storage.json');
+
+      if (fs.existsSync(secureStorageFile)) {
+        const data = fs.readFileSync(secureStorageFile, 'utf8');
+        const secureStorage = JSON.parse(data);
+        delete secureStorage[key];
+        fs.writeFileSync(secureStorageFile, JSON.stringify(secureStorage, null, 2));
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -416,6 +496,280 @@ function setupIpcHandlers() {
   ipcMain.handle('app:openExternal', async (event, url) => {
     shell.openExternal(url);
     return { success: true };
+  });
+
+  // User data handlers
+  ipcMain.handle('userData:saveUser', async (event, user) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const userDataFile = path.join(userDataPath, 'user-data.json');
+
+      // Ensure directory exists
+      if (!fs.existsSync(userDataPath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+      }
+
+      // Read existing data or create new
+      let userData = {};
+      if (fs.existsSync(userDataFile)) {
+        try {
+          const data = fs.readFileSync(userDataFile, 'utf8');
+          userData = JSON.parse(data);
+        } catch (parseError) {
+          console.warn('Could not parse existing user data, creating new file');
+          userData = {};
+        }
+      }
+
+      // Save user data
+      userData.user = user;
+      fs.writeFileSync(userDataFile, JSON.stringify(userData, null, 2));
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('userData:getUser', async (event) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const userDataFile = path.join(userDataPath, 'user-data.json');
+
+      if (fs.existsSync(userDataFile)) {
+        const data = fs.readFileSync(userDataFile, 'utf8');
+        const userData = JSON.parse(data);
+        return userData.user || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user data:', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('userData:saveContacts', async (event, contacts) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const userDataFile = path.join(userDataPath, 'user-data.json');
+
+      // Ensure directory exists
+      if (!fs.existsSync(userDataPath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+      }
+
+      // Read existing data or create new
+      let userData = {};
+      if (fs.existsSync(userDataFile)) {
+        try {
+          const data = fs.readFileSync(userDataFile, 'utf8');
+          userData = JSON.parse(data);
+        } catch (parseError) {
+          console.warn('Could not parse existing user data, creating new file');
+          userData = {};
+        }
+      }
+
+      // Save contacts
+      userData.contacts = contacts;
+      fs.writeFileSync(userDataFile, JSON.stringify(userData, null, 2));
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving contacts:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('userData:getContacts', async (event) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const userDataFile = path.join(userDataPath, 'user-data.json');
+
+      if (fs.existsSync(userDataFile)) {
+        const data = fs.readFileSync(userDataFile, 'utf8');
+        const userData = JSON.parse(data);
+        return userData.contacts || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error getting contacts:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('userData:clearUserData', async (event) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const userDataFile = path.join(userDataPath, 'user-data.json');
+
+      if (fs.existsSync(userDataFile)) {
+        fs.unlinkSync(userDataFile);
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Error clearing user data:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Message cache handlers
+  ipcMain.handle('messageCache:saveMessages', async (event, userId, messages) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const messageCacheDir = path.join(userDataPath, 'message-cache');
+      const messageCacheFile = path.join(messageCacheDir, `messages_${userId}.json`);
+
+      // Ensure directory exists
+      if (!fs.existsSync(messageCacheDir)) {
+        fs.mkdirSync(messageCacheDir, { recursive: true });
+      }
+
+      // Save messages
+      fs.writeFileSync(messageCacheFile, JSON.stringify(messages, null, 2));
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving messages:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('messageCache:getMessages', async (event, userId) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const messageCacheDir = path.join(userDataPath, 'message-cache');
+      const messageCacheFile = path.join(messageCacheDir, `messages_${userId}.json`);
+
+      if (fs.existsSync(messageCacheFile)) {
+        const data = fs.readFileSync(messageCacheFile, 'utf8');
+        return JSON.parse(data);
+      }
+      return [];
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('messageCache:searchMessages', async (event, query, userId) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const messageCacheDir = path.join(userDataPath, 'message-cache');
+      const messageCacheFile = path.join(messageCacheDir, `messages_${userId}.json`);
+
+      let messages = [];
+      if (fs.existsSync(messageCacheFile)) {
+        const data = fs.readFileSync(messageCacheFile, 'utf8');
+        messages = JSON.parse(data);
+      }
+
+      if (!query || query.trim() === '') {
+        return [];
+      }
+
+      const searchTerm = query.toLowerCase();
+      const filteredMessages = messages.filter(message =>
+        message.content && message.content.toLowerCase().includes(searchTerm)
+      );
+
+      return filteredMessages;
+    } catch (error) {
+      console.error('Error searching messages:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('messageCache:clearMessages', async (event, userId) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const messageCacheDir = path.join(userDataPath, 'message-cache');
+      const messageCacheFile = path.join(messageCacheDir, `messages_${userId}.json`);
+
+      if (fs.existsSync(messageCacheFile)) {
+        fs.unlinkSync(messageCacheFile);
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Error clearing messages:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('messageCache:clearAllMessages', async (event) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const userDataPath = app.getPath('userData');
+      const messageCacheDir = path.join(userDataPath, 'message-cache');
+
+      if (fs.existsSync(messageCacheDir)) {
+        // Remove all message cache files
+        const files = fs.readdirSync(messageCacheDir);
+        for (const file of files) {
+          if (file.startsWith('messages_') && file.endsWith('.json')) {
+            fs.unlinkSync(path.join(messageCacheDir, file));
+          }
+        }
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Error clearing all messages:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // WebSocket handlers
+  // Note: These are simplified handlers. In a real implementation, you might want
+  // to manage WebSocket connections in the main process for better security
+  ipcMain.handle('websocket:createConnection', async (event, url, protocols) => {
+    try {
+      // For now, we'll return a connection ID and let the renderer handle the actual WebSocket
+      // In a more secure implementation, you'd manage WebSockets in the main process
+      const connectionId = `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      return { success: true, connectionId, url, protocols };
+    } catch (error) {
+      console.error('Error creating WebSocket connection:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('websocket:closeConnection', async (event, connectionId) => {
+    try {
+      // Signal to renderer to close the connection
+      event.sender.send(`websocket:close:${connectionId}`, { reason: 'Closed by main process' });
+      return { success: true };
+    } catch (error) {
+      console.error('Error closing WebSocket connection:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('websocket:sendMessage', async (event, connectionId, message) => {
+    try {
+      // In a real implementation, you'd send the message through the WebSocket
+      // For now, we'll just acknowledge the send request
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending WebSocket message:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   // Development handlers
