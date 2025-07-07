@@ -359,6 +359,7 @@ body {
 .message-input-container {
     border-top: 1px solid #ecf0f1;
     background-color: #fff;
+    position: relative; /* Added for emoji picker positioning */
 }
 
 .offline-indicator {
@@ -434,10 +435,25 @@ body {
     border-radius: 50%;
     background-color: transparent;
     border: 1px solid #ddd;
+    cursor: pointer;
+    pointer-events: auto;
+    position: relative;
+    z-index: 10;
+    min-width: 40px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-icon:hover {
     background-color: #f8f9fa;
+    border-color: #007bff;
+}
+
+.btn-icon:active {
+    background-color: #e9ecef;
+    transform: scale(0.95);
 }
 
 /* Emoji picker */
