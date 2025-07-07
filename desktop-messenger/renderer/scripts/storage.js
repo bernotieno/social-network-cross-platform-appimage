@@ -92,48 +92,117 @@ class StorageManager {
 
     async saveMessages(roomId, messages) {
         await this.ensureInitialized();
-        
-        const transaction = this.db.transaction(['messages'], 'readwrite');
-        const store = transaction.objectStore('messages');
-        
-        // Clear existing messages for this room first
-        await this.clearMessagesForRoom(roomId);
-        
-        const promises = messages.map(message => {
-            const messageData = {
-                roomId,
-                senderId: message.senderId || message.sender,
-                content: message.content,
-                timestamp: message.timestamp || new Date().toISOString(),
-                createdAt: message.createdAt || new Date().toISOString()
-            };
-            
-            return new Promise((resolve, reject) => {
-                const request = store.add(messageData);
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-            });
-        });
 
-        return Promise.all(promises);
+        console.log(`StorageManager: Saving ${messages.length} messages for room ${roomId}`);
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['messages'], 'readwrite');
+            const store = transaction.objectStore('messages');
+            const index = store.index('roomId');
+
+            // First, clear existing messages for this room
+            console.log(`StorageManager: Clearing existing messages for room ${roomId}`);
+
+            const clearRequest = index.openCursor(roomId);
+            const messagesToDelete = [];
+
+            clearRequest.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    messagesToDelete.push(cursor.primaryKey);
+                    cursor.continue();
+                } else {
+                    // Delete all found messages
+                    messagesToDelete.forEach(key => {
+                        store.delete(key);
+                    });
+                    console.log(`StorageManager: Deleted ${messagesToDelete.length} existing messages for room ${roomId}`);
+
+                    // Now add the new messages
+                    let addedCount = 0;
+                    const errors = [];
+
+                    if (messages.length === 0) {
+                        console.log(`StorageManager: No messages to save for room ${roomId}`);
+                        resolve([]);
+                        return;
+                    }
+
+                    messages.forEach((message, index) => {
+                        const messageData = {
+                            roomId,
+                            senderId: message.senderId || message.sender,
+                            content: message.content,
+                            timestamp: message.timestamp || new Date().toISOString(),
+                            createdAt: message.createdAt || new Date().toISOString()
+                        };
+
+                        if (index < 3) {
+                            console.log(`StorageManager: Saving message ${index}:`, messageData);
+                        }
+
+                        const addRequest = store.add(messageData);
+                        addRequest.onsuccess = () => {
+                            addedCount++;
+                            if (addedCount === messages.length) {
+                                if (errors.length > 0) {
+                                    console.error(`StorageManager: ${errors.length} errors while saving messages:`, errors);
+                                    reject(errors[0]);
+                                } else {
+                                    console.log(`StorageManager: Successfully saved ${addedCount} messages for room ${roomId}`);
+                                    resolve(messages);
+                                }
+                            }
+                        };
+                        addRequest.onerror = () => {
+                            errors.push(addRequest.error);
+                            addedCount++;
+                            if (addedCount === messages.length) {
+                                console.error(`StorageManager: ${errors.length} errors while saving messages:`, errors);
+                                reject(errors[0]);
+                            }
+                        };
+                    });
+                }
+            };
+
+            clearRequest.onerror = () => {
+                console.error('StorageManager: Error clearing messages:', clearRequest.error);
+                reject(clearRequest.error);
+            };
+        });
     }
 
     async getMessages(roomId, limit = 100) {
         await this.ensureInitialized();
-        
+
+        console.log(`StorageManager: Getting messages for room ${roomId} with limit ${limit}`);
+
         const transaction = this.db.transaction(['messages'], 'readonly');
         const store = transaction.objectStore('messages');
         const index = store.index('roomId');
-        
+
         return new Promise((resolve, reject) => {
             const request = index.getAll(roomId);
             request.onsuccess = () => {
-                const messages = request.result
+                const allMessages = request.result;
+                console.log(`StorageManager: Found ${allMessages.length} total messages in cache for room ${roomId}`);
+
+                const messages = allMessages
                     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
                     .slice(-limit); // Get the last N messages
+
+                console.log(`StorageManager: Returning ${messages.length} messages after sorting and limiting`);
+                if (messages.length > 0) {
+                    console.log('StorageManager: First cached message:', messages[0]);
+                    console.log('StorageManager: Last cached message:', messages[messages.length - 1]);
+                }
                 resolve(messages);
             };
-            request.onerror = () => reject(request.error);
+            request.onerror = () => {
+                console.error('StorageManager: Error getting messages:', request.error);
+                reject(request.error);
+            };
         });
     }
 
