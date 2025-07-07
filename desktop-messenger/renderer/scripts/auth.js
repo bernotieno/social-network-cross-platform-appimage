@@ -21,14 +21,20 @@ class AuthManager {
             }
 
             if (storedSession && storedSession.token && storedSession.user) {
+                console.log('=== STORED SESSION FOUND ===');
+                console.log('Session data:', JSON.stringify(storedSession, null, 2));
+                console.log('============================');
+
                 // Validate the session with the backend
-                const isValid = await this.validateSession(storedSession.token);
+                const isValid = await this.validateSession(storedSession.token, storedSession.user);
                 if (isValid) {
-                    this.currentUser = storedSession.user;
+                    this.currentUser = storedSession.user; // Ensure currentUser is set
                     this.isAuthenticated = true;
                     this.showChatScreen();
                     return;
                 }
+            } else {
+                console.log('No valid stored session found');
             }
         } catch (error) {
             console.error('Error initializing auth:', error);
@@ -38,9 +44,13 @@ class AuthManager {
         this.showLoginScreen();
     }
 
-    async validateSession(token) {
+    async validateSession(token, storedUser = null) {
         try {
-            const response = await fetch(`${this.apiBaseUrl}/users/profile`, {
+            console.log('Validating session with token:', token ? 'Token present' : 'No token');
+            console.log('Stored user:', storedUser);
+
+            // Try to validate with any authenticated endpoint
+            const response = await fetch(`${this.apiBaseUrl}/messages/online-users`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -49,14 +59,22 @@ class AuthManager {
                 credentials: 'include'
             });
 
+            console.log('Session validation response status:', response.status);
+
             if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.user) {
-                    this.currentUser = data.user;
+                // Token is valid, set the user from stored data
+                if (storedUser) {
+                    this.currentUser = storedUser;
+                    console.log('Session validation successful, user set:', this.currentUser);
                     return true;
+                } else {
+                    console.log('Token valid but no stored user data');
+                    return false;
                 }
+            } else {
+                console.log('Session validation failed, response not ok');
+                return false;
             }
-            return false;
         } catch (error) {
             console.error('Session validation error:', error);
             return false;
@@ -77,24 +95,39 @@ class AuthManager {
             const data = await response.json();
 
             if (response.ok && data.success) {
-                this.currentUser = data.user;
+                console.log('=== LOGIN RESPONSE DATA ===');
+                console.log('Full response:', JSON.stringify(data, null, 2));
+                console.log('User data:', JSON.stringify(data.data?.user, null, 2));
+                console.log('Token:', data.data?.token ? 'Present' : 'Missing');
+                console.log('===========================');
+
+                // Extract user and token from the nested data structure
+                const user = data.data?.user;
+                const token = data.data?.token;
+
+                if (!user || !token) {
+                    console.error('Missing user or token in response');
+                    return { success: false, error: 'Invalid response format' };
+                }
+
+                this.currentUser = user;
                 this.isAuthenticated = true;
 
                 // Store session securely
                 if (this.isElectron) {
                     await window.electronAPI.auth.login({
-                        token: data.token,
-                        user: data.user
+                        token: token,
+                        user: user
                     });
                     // Store user data
-                    await window.electronAPI.userData.saveUser(data.user);
+                    await window.electronAPI.userData.saveUser(user);
                 } else {
                     // Store in localStorage for web version
                     localStorage.setItem('socialNetworkSession', JSON.stringify({
-                        token: data.token,
-                        user: data.user
+                        token: token,
+                        user: user
                     }));
-                    localStorage.setItem('socialNetworkUser', JSON.stringify(data.user));
+                    localStorage.setItem('socialNetworkUser', JSON.stringify(user));
                 }
 
                 this.showChatScreen();
@@ -160,20 +193,176 @@ class AuthManager {
     }
 
     showChatScreen() {
+        console.log('Showing chat screen...');
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('chat-screen').style.display = 'flex';
-        
+
         // Update user info in the sidebar
         if (this.currentUser) {
+            console.log('=== CURRENT USER DATA ===');
+            console.log(JSON.stringify(this.currentUser, null, 2));
+            console.log('========================');
+
             document.getElementById('user-name').textContent = this.currentUser.fullName || this.currentUser.username;
             const userAvatar = document.getElementById('user-avatar');
+
+            let avatarUrl;
             if (this.currentUser.profilePicture) {
-                userAvatar.src = `http://localhost:8080${this.currentUser.profilePicture}`;
+                avatarUrl = `${this.apiBaseUrl.replace('/api', '')}${this.currentUser.profilePicture}`;
+                console.log('User avatar URL:', avatarUrl);
+                console.log('User profilePicture:', this.currentUser.profilePicture);
+                console.log('API base URL:', this.apiBaseUrl);
             } else {
-                userAvatar.src = this.getFallbackAvatar(this.currentUser);
+                avatarUrl = this.getFallbackAvatar(this.currentUser);
+                console.log('Using fallback avatar for user (no profilePicture)');
             }
+
+            // Set up error handler for fallback
+            userAvatar.onerror = (error) => {
+                console.error('❌ User avatar failed to load:', error);
+                console.log('Failed URL was:', avatarUrl);
+                userAvatar.src = this.getFallbackAvatar(this.currentUser);
+                userAvatar.onerror = null; // Prevent infinite loop
+            };
+
+            userAvatar.src = avatarUrl;
+        } else {
+            console.warn('No current user found when showing chat screen');
         }
+
+        // Set up logout button event listener now that the chat screen is visible
+        this.setupLogoutButton();
+
+        // Add debug function to window for easy access
+        this.addDebugFunctions();
+    }
+
+    setupLogoutButton() {
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            // Remove any existing event listeners
+            logoutBtn.replaceWith(logoutBtn.cloneNode(true));
+            const newLogoutBtn = document.getElementById('logout-btn');
+
+            newLogoutBtn.addEventListener('click', () => {
+                this.logout();
+            });
+        }
+    }
+
+    addDebugFunctions() {
+        // Add global debug functions
+        window.printUserData = () => {
+            console.log('=== CURRENT USER DATA ===');
+            console.log(JSON.stringify(this.currentUser, null, 2));
+            console.log('========================');
+            return this.currentUser;
+        };
+
+        window.printStoredSession = async () => {
+            try {
+                const session = await window.electronAPI.auth.getStoredSession();
+                console.log('=== STORED SESSION DATA ===');
+                console.log(JSON.stringify(session, null, 2));
+                console.log('===========================');
+                return session;
+            } catch (error) {
+                console.error('Error getting stored session:', error);
+                return null;
+            }
+        };
+
+        window.printAllUserData = async () => {
+            console.log('=== ALL USER DATA ===');
+            console.log('Current User:', this.currentUser);
+            console.log('Is Authenticated:', this.isAuthenticated);
+
+            try {
+                const session = await window.electronAPI.auth.getStoredSession();
+                console.log('Stored Session:', session);
+            } catch (error) {
+                console.error('Error getting stored session:', error);
+            }
+
+            console.log('====================');
+        };
+
+        // Add avatar debug functions
+        window.debugAvatars = {
+            refreshAvatars: () => {
+                if (window.chatManager) {
+                    window.chatManager.refreshAllAvatars();
+                    console.log('Avatars refreshed');
+                } else {
+                    console.log('Chat manager not available');
+                }
+            },
+            showAvatarCache: () => {
+                if (window.chatManager && window.chatManager.avatarCache) {
+                    console.log('Avatar cache:', window.chatManager.avatarCache);
+                    return window.chatManager.avatarCache;
+                } else {
+                    console.log('Avatar cache not available');
+                }
+            },
+            testAvatarUrl: (contact) => {
+                if (window.chatManager) {
+                    const url = window.chatManager.getContactAvatar(contact);
+                    console.log('Avatar URL for', contact.username, ':', url);
+                    return url;
+                } else {
+                    console.log('Chat manager not available');
+                }
+            },
+            testImageLoad: (url) => {
+                console.log('Testing image load for URL:', url);
+                const img = new Image();
+                img.onload = () => console.log('✅ Image loaded successfully:', url);
+                img.onerror = (error) => console.error('❌ Image failed to load:', url, error);
+                img.src = url;
+                return img;
+            },
+            checkBackendConnection: async () => {
+                try {
+                    const response = await fetch('http://localhost:8080/uploads/avatars/4c4cc51c-658f-4ce7-80fb-87b376a8e74e.jpg');
+                    console.log('Backend avatar test response:', response.status, response.statusText);
+                    if (response.ok) {
+                        console.log('✅ Backend avatar endpoint is accessible');
+                    } else {
+                        console.log('❌ Backend avatar endpoint returned error:', response.status);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to connect to backend avatar endpoint:', error);
+                }
+            },
+            testContactsData: () => {
+                if (window.chatManager && window.chatManager.contacts) {
+                    console.log('=== CONTACTS DATA ===');
+                    window.chatManager.contacts.forEach(contact => {
+                        console.log(`Contact: ${contact.username} (${contact.fullName})`);
+                        console.log(`  ID: ${contact.id}`);
+                        console.log(`  Profile Picture: ${contact.profilePicture}`);
+                        if (contact.profilePicture) {
+                            const avatarUrl = window.chatManager.getContactAvatar(contact);
+                            console.log(`  Generated Avatar URL: ${avatarUrl}`);
+                        }
+                        console.log('---');
+                    });
+                    console.log('===================');
+                } else {
+                    console.log('No contacts data available');
+                }
+            }
+        };
+
+        console.log('Debug functions added to window:');
+        console.log('- printUserData() - prints current user data');
+        console.log('- printStoredSession() - prints stored session data');
+        console.log('- printAllUserData() - prints all user-related data');
+        console.log('- debugAvatars.refreshAvatars() - refresh all avatars');
+        console.log('- debugAvatars.showAvatarCache() - show avatar cache');
+        console.log('- debugAvatars.testAvatarUrl(contact) - test avatar URL for contact');
     }
 
     getFallbackAvatar(user) {
