@@ -11,22 +11,28 @@ class ChatManager {
         this.apiBaseUrl = 'http://localhost:8080/api';
         this.messageQueue = []; // For offline messages
         this.isOnline = navigator.onLine;
-        
-        this.init();
+        this.isInitialized = false;
+        this.avatarCache = new Map(); // Initialize avatar cache early
+
+        // Don't call init() here - it will be called from main.js
     }
 
     async init() {
+        if (this.isInitialized) return;
+
         // Initialize storage
         await storageManager.init();
-        
+
         // Set up event listeners
         this.setupEventListeners();
-        
+
         // Monitor network status
         this.setupNetworkMonitoring();
-        
+
         // Load cached data
         await this.loadCachedData();
+
+        this.isInitialized = true;
     }
 
     setupEventListeners() {
@@ -42,6 +48,10 @@ class ChatManager {
         });
 
         wsManager.on('message', (data) => {
+            this.handleWebSocketMessage(data);
+        });
+
+        wsManager.on('new_message', (data) => {
             this.handleWebSocketMessage(data);
         });
 
@@ -67,13 +77,25 @@ class ChatManager {
             this.handleTyping(e.target.value);
         });
 
-        document.getElementById('emoji-btn').addEventListener('click', () => {
-            this.toggleEmojiPicker();
+        // Add keyboard shortcut for emoji picker (Ctrl/Cmd + E)
+        document.getElementById('message-input').addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+                e.preventDefault();
+                console.log('Emoji shortcut triggered (Ctrl/Cmd + E)');
+                this.toggleEmojiPicker();
+            }
         });
 
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            authManager.logout();
+        // Use event delegation for emoji button since it might be in a hidden container initially
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'emoji-btn' || e.target.closest('#emoji-btn')) {
+                console.log('Emoji button clicked via delegation!');
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleEmojiPicker();
+            }
         });
+        console.log('Emoji button event delegation set up');
     }
 
     setupNetworkMonitoring() {
@@ -120,18 +142,39 @@ class ChatManager {
 
     async loadContacts() {
         try {
+            console.log('Loading contacts...');
             const user = authManager.getCurrentUser();
-            if (!user) return;
+            if (!user) {
+                console.warn('No current user found, cannot load contacts');
+                return;
+            }
+            console.log('Current user:', user);
+
+            // Get the stored session token
+            const session = await window.electronAPI.auth.getStoredSession();
+            if (!session || !session.token) {
+                console.error('No valid session token found');
+                return;
+            }
+            console.log('Session token found, making API calls...');
+
+            const headers = {
+                'Authorization': `Bearer ${session.token}`,
+                'Content-Type': 'application/json'
+            };
 
             // Get both followers and following
             const [followingResponse, followersResponse, onlineUsersResponse] = await Promise.all([
                 fetch(`${this.apiBaseUrl}/users/${user.id}/following`, {
+                    headers,
                     credentials: 'include'
                 }),
                 fetch(`${this.apiBaseUrl}/users/${user.id}/followers`, {
+                    headers,
                     credentials: 'include'
                 }),
                 fetch(`${this.apiBaseUrl}/messages/online-users`, {
+                    headers,
                     credentials: 'include'
                 })
             ]);
@@ -140,15 +183,21 @@ class ChatManager {
             const followersData = await followersResponse.json();
             const onlineUsersData = await onlineUsersResponse.json();
 
+            console.log('API responses:', {
+                following: followingData,
+                followers: followersData,
+                onlineUsers: onlineUsersData
+            });
+
             // Combine and deduplicate contacts
             const contactsMap = new Map();
-            
+
             if (followingData.success && followingData.data?.following) {
                 followingData.data.following.forEach(user => {
                     contactsMap.set(user.id, user);
                 });
             }
-            
+
             if (followersData.success && followersData.data?.followers) {
                 followersData.data.followers.forEach(user => {
                     contactsMap.set(user.id, user);
@@ -156,15 +205,19 @@ class ChatManager {
             }
 
             this.contacts = Array.from(contactsMap.values());
-            
+            console.log('Loaded contacts:', this.contacts);
+
             // Update online users
             if (onlineUsersData.success && onlineUsersData.onlineUsers) {
                 this.onlineUsers = new Set(onlineUsersData.onlineUsers.map(user => user.id));
             }
 
+            // Preload avatars for better performance
+            this.preloadAvatars(this.contacts);
+
             // Cache contacts
             await storageManager.saveContacts(this.contacts);
-            
+
             this.renderContacts();
         } catch (error) {
             console.error('Error loading contacts:', error);
@@ -206,9 +259,13 @@ class ChatManager {
         const roomId = this.getRoomId(authManager.getCurrentUser().id, contact.id);
         const isTyping = this.typingUsers.has(roomId) && this.typingUsers.get(roomId).has(contact.id);
         
+        const avatarUrl = this.getContactAvatar(contact);
+        const fallbackUrl = Utils.generateFallbackAvatar(contact);
+
         div.innerHTML = `
             <div class="contact-avatar-container">
-                <img class="contact-avatar" src="${this.getContactAvatar(contact)}" alt="${contact.username}">
+                <img class="contact-avatar" src="${avatarUrl}" alt="${contact.username}"
+                     data-fallback="${fallbackUrl}" data-contact-id="${contact.id}">
                 ${isOnline ? '<div class="online-indicator"></div>' : ''}
             </div>
             <div class="contact-info">
@@ -220,6 +277,14 @@ class ChatManager {
             </div>
         `;
 
+        // Set up proper error handling for the avatar
+        const avatarImg = div.querySelector('.contact-avatar');
+        avatarImg.onerror = () => {
+            console.log('Avatar failed to load for', contact.username, 'using fallback');
+            avatarImg.src = fallbackUrl;
+            avatarImg.onerror = null; // Prevent infinite loop
+        };
+
         div.addEventListener('click', () => {
             this.selectContact(contact);
         });
@@ -228,10 +293,91 @@ class ChatManager {
     }
 
     getContactAvatar(contact) {
-        if (contact.profilePicture) {
-            return `http://localhost:8080${contact.profilePicture}`;
+        // Check cache first
+        if (this.avatarCache && this.avatarCache.has(contact.id)) {
+            return this.avatarCache.get(contact.id);
         }
-        return authManager.getFallbackAvatar(contact);
+
+        if (contact.profilePicture) {
+            // Use the API base URL instead of hardcoded localhost
+            const avatarUrl = `${this.apiBaseUrl.replace('/api', '')}${contact.profilePicture}`;
+            console.log('Generated avatar URL for', contact.username, ':', avatarUrl);
+            console.log('Contact profilePicture:', contact.profilePicture);
+            console.log('API base URL:', this.apiBaseUrl);
+            return avatarUrl;
+        }
+
+        // Generate fallback avatar immediately
+        const fallbackUrl = Utils.generateFallbackAvatar(contact);
+        console.log('Generated fallback avatar for', contact.username);
+        return fallbackUrl;
+    }
+
+    preloadAvatars(contacts) {
+        console.log('Preloading avatars for', contacts.length, 'contacts');
+        if (!this.avatarCache) {
+            this.avatarCache = new Map();
+        }
+
+        contacts.forEach(contact => {
+            if (contact.profilePicture) {
+                const avatarUrl = `${this.apiBaseUrl.replace('/api', '')}${contact.profilePicture}`;
+                console.log('Preloading avatar for', contact.username, 'from URL:', avatarUrl);
+                const img = new Image();
+
+                img.onload = () => {
+                    this.avatarCache.set(contact.id, avatarUrl);
+                    console.log('✅ Avatar preloaded successfully for:', contact.username);
+                    // Update any existing avatar elements
+                    this.updateExistingAvatars(contact.id, avatarUrl);
+                };
+
+                img.onerror = (error) => {
+                    console.error('❌ Avatar failed to preload for:', contact.username, 'Error:', error);
+                    console.log('Failed URL was:', avatarUrl);
+                    const fallbackUrl = Utils.generateFallbackAvatar(contact);
+                    this.avatarCache.set(contact.id, fallbackUrl);
+                    // Update any existing avatar elements with fallback
+                    this.updateExistingAvatars(contact.id, fallbackUrl);
+                };
+
+                img.src = avatarUrl;
+            } else {
+                // Generate and cache fallback avatar immediately
+                const fallbackUrl = Utils.generateFallbackAvatar(contact);
+                this.avatarCache.set(contact.id, fallbackUrl);
+                console.log('Generated fallback avatar for:', contact.username, '(no profilePicture)');
+            }
+        });
+    }
+
+    updateExistingAvatars(contactId, avatarUrl) {
+        // Update contact list avatars
+        const contactAvatars = document.querySelectorAll(`[data-contact-id="${contactId}"]`);
+        contactAvatars.forEach(avatar => {
+            avatar.src = avatarUrl;
+        });
+
+        // Update chat header avatar if this contact is currently selected
+        if (this.selectedContact && this.selectedContact.id === contactId) {
+            const chatHeaderAvatar = document.getElementById('contact-avatar');
+            if (chatHeaderAvatar) {
+                chatHeaderAvatar.src = avatarUrl;
+            }
+        }
+    }
+
+    // Force refresh all avatars (useful for debugging)
+    refreshAllAvatars() {
+        console.log('Refreshing all avatars...');
+        this.avatarCache.clear();
+        this.preloadAvatars(this.contacts);
+        this.renderContacts();
+
+        // Refresh current chat header avatar
+        if (this.selectedContact) {
+            this.updateChatHeader(this.selectedContact);
+        }
     }
 
     async selectContact(contact) {
@@ -262,19 +408,37 @@ class ChatManager {
 
     updateChatHeader(contact) {
         document.getElementById('contact-name').textContent = contact.fullName || contact.username;
-        document.getElementById('contact-avatar').src = this.getContactAvatar(contact);
-        
+
+        // Set up avatar with error handling
+        const avatarElement = document.getElementById('contact-avatar');
+        const avatarUrl = this.getContactAvatar(contact);
+        const fallbackUrl = Utils.generateFallbackAvatar(contact);
+
+        console.log('Updating chat header avatar for', contact.username, 'with URL:', avatarUrl);
+
+        // Remove any existing error handlers
+        avatarElement.onerror = null;
+
+        // Set up error handler for fallback
+        avatarElement.onerror = () => {
+            console.log('Chat header avatar failed to load, using fallback for:', contact.username);
+            avatarElement.src = fallbackUrl;
+            avatarElement.onerror = null; // Prevent infinite loop
+        };
+
+        avatarElement.src = avatarUrl;
+
         const isOnline = this.onlineUsers.has(contact.id);
         const roomId = this.getRoomId(authManager.getCurrentUser().id, contact.id);
         const isTyping = this.typingUsers.has(roomId) && this.typingUsers.get(roomId).has(contact.id);
-        
+
         let statusText = '@' + contact.username;
         if (isTyping) {
             statusText += ' • typing...';
         } else if (isOnline) {
             statusText += ' • Online';
         }
-        
+
         document.getElementById('contact-status').textContent = statusText;
     }
 
@@ -289,7 +453,20 @@ class ChatManager {
 
             // Then, fetch fresh messages from API
             if (this.isOnline) {
+                // Get the stored session token
+                const session = await window.electronAPI.auth.getStoredSession();
+                if (!session || !session.token) {
+                    console.error('No valid session token found for loading messages');
+                    return;
+                }
+
+                const headers = {
+                    'Authorization': `Bearer ${session.token}`,
+                    'Content-Type': 'application/json'
+                };
+
                 const response = await fetch(`${this.apiBaseUrl}/messages/${contactId}`, {
+                    headers,
                     credentials: 'include'
                 });
 
@@ -389,10 +566,20 @@ class ChatManager {
 
         if (this.isOnline) {
             try {
+                // Get the stored session token
+                const session = await window.electronAPI.auth.getStoredSession();
+                if (!session || !session.token) {
+                    console.error('No valid session token found for sending message');
+                    message.pending = true;
+                    this.renderMessages();
+                    return;
+                }
+
                 // Send via API
                 const response = await fetch(`${this.apiBaseUrl}/messages`, {
                     method: 'POST',
                     headers: {
+                        'Authorization': `Bearer ${session.token}`,
                         'Content-Type': 'application/json'
                     },
                     credentials: 'include',
@@ -465,7 +652,8 @@ class ChatManager {
     }
 
     handleWebSocketMessage(data) {
-        if (data.type === 'message' && data.payload) {
+        // Handle both 'message' and 'new_message' types
+        if ((data.type === 'message' || data.type === 'new_message') && data.payload) {
             const messageData = data.payload.message;
             const roomId = data.payload.roomId;
 
@@ -478,8 +666,8 @@ class ChatManager {
                 };
 
                 // Check if message already exists (avoid duplicates)
-                const exists = this.messages.some(msg => 
-                    msg.content === message.content && 
+                const exists = this.messages.some(msg =>
+                    msg.content === message.content &&
                     msg.senderId === message.senderId &&
                     Math.abs(new Date(msg.timestamp) - new Date(message.timestamp)) < 5000
                 );
@@ -487,7 +675,7 @@ class ChatManager {
                 if (!exists) {
                     this.messages.push(message);
                     this.renderMessages();
-                    
+
                     // Cache message
                     storageManager.saveMessage(roomId, message);
 
@@ -582,32 +770,53 @@ class ChatManager {
     }
 
     toggleEmojiPicker() {
+        console.log('toggleEmojiPicker called');
         const emojiPicker = document.getElementById('emoji-picker');
+
+        if (!emojiPicker) {
+            console.error('Emoji picker element not found');
+            return;
+        }
+
         const isVisible = emojiPicker.style.display !== 'none';
-        
+        console.log('Emoji picker current visibility:', isVisible);
+
         if (isVisible) {
             emojiPicker.style.display = 'none';
+            console.log('Hiding emoji picker');
         } else {
             this.renderEmojiPicker();
             emojiPicker.style.display = 'grid';
+            console.log('Showing emoji picker');
         }
     }
 
     renderEmojiPicker() {
+        console.log('Rendering emoji picker');
         const emojiPicker = document.getElementById('emoji-picker');
+
+        if (!emojiPicker) {
+            console.error('Emoji picker container not found');
+            return;
+        }
+
         const emojis = ['😀', '😂', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💯', '😊', '😎', '🤗', '😘', '🥰', '😋', '🤪', '😜', '🙃', '😇', '🤩', '🥳', '😴', '🤤', '😪', '😵', '🤯', '🤠', '🥸', '😈', '👿', '💀'];
-        
+
         emojiPicker.innerHTML = '';
         emojis.forEach(emoji => {
             const button = document.createElement('button');
             button.className = 'emoji-btn';
             button.textContent = emoji;
-            button.addEventListener('click', () => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Emoji clicked:', emoji);
                 this.insertEmoji(emoji);
                 this.toggleEmojiPicker();
             });
             emojiPicker.appendChild(button);
         });
+        console.log('Emoji picker rendered with', emojis.length, 'emojis');
     }
 
     insertEmoji(emoji) {
@@ -685,9 +894,14 @@ class ChatManager {
 
     // Public methods for external use
     async start() {
+        // Initialize if not already done
+        if (!this.isInitialized) {
+            await this.init();
+        }
+
         if (authManager.isLoggedIn()) {
             await this.loadContacts();
-            
+
             // Connect WebSocket
             const session = await window.electronAPI.auth.getStoredSession();
             if (session && session.token) {
