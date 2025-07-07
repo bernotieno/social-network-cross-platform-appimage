@@ -68,36 +68,79 @@ class Utils {
 
     // Generate avatar URL or fallback
     static getAvatarUrl(user, baseUrl = 'http://localhost:8080') {
-        if (user.profilePicture) {
-            return `${baseUrl}${user.profilePicture}`;
+        if (user && user.profilePicture) {
+            // Ensure the URL is properly formatted
+            const cleanBaseUrl = baseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+            const cleanProfilePicture = user.profilePicture.startsWith('/') ? user.profilePicture : `/${user.profilePicture}`;
+            return `${cleanBaseUrl}${cleanProfilePicture}`;
         }
         return Utils.generateFallbackAvatar(user);
     }
 
     // Generate fallback avatar
     static generateFallbackAvatar(user) {
-        const initials = user.fullName 
-            ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase()
-            : user.username[0].toUpperCase();
-        
+        if (!user) {
+            return Utils.generateDefaultAvatar();
+        }
+
+        let initials = 'U';
+        if (user.fullName) {
+            initials = user.fullName.split(' ')
+                .map(n => n.trim())
+                .filter(n => n.length > 0)
+                .map(n => n[0])
+                .join('')
+                .toUpperCase()
+                .substring(0, 2); // Max 2 initials
+        } else if (user.username) {
+            initials = user.username.substring(0, 2).toUpperCase();
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = 40;
-        canvas.height = 40;
+        canvas.width = 80; // Higher resolution for better quality
+        canvas.height = 80;
         const ctx = canvas.getContext('2d');
-        
-        // Background color based on user ID
-        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
-        const colorIndex = user.id ? user.id.charCodeAt(0) % colors.length : 0;
+
+        // Background color based on user ID or username
+        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+        let colorIndex = 0;
+        if (user.id) {
+            colorIndex = user.id.charCodeAt(0) % colors.length;
+        } else if (user.username) {
+            colorIndex = user.username.charCodeAt(0) % colors.length;
+        }
+
         ctx.fillStyle = colors[colorIndex];
-        ctx.fillRect(0, 0, 40, 40);
-        
+        ctx.fillRect(0, 0, 80, 80);
+
         // Text
         ctx.fillStyle = 'white';
-        ctx.font = '16px Arial';
+        ctx.font = 'bold 28px Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(initials, 20, 20);
-        
+        ctx.fillText(initials, 40, 40);
+
+        return canvas.toDataURL();
+    }
+
+    // Generate a default avatar when no user data is available
+    static generateDefaultAvatar() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 80;
+        canvas.height = 80;
+        const ctx = canvas.getContext('2d');
+
+        // Gray background
+        ctx.fillStyle = '#95a5a6';
+        ctx.fillRect(0, 0, 80, 80);
+
+        // User icon
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 32px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('👤', 40, 40);
+
         return canvas.toDataURL();
     }
 
