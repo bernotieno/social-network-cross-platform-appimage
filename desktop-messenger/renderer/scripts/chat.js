@@ -381,6 +381,8 @@ class ChatManager {
     }
 
     async selectContact(contact) {
+        console.log(`Selecting contact: ${contact.username} (ID: ${contact.id})`);
+
         // Update UI
         document.querySelectorAll('.contact-item').forEach(item => {
             item.classList.remove('active');
@@ -389,6 +391,7 @@ class ChatManager {
 
         this.selectedContact = contact;
         this.currentRoomId = this.getRoomId(authManager.getCurrentUser().id, contact.id);
+        console.log(`Room ID set to: ${this.currentRoomId}`);
 
         // Show chat container
         document.getElementById('no-chat-selected').style.display = 'none';
@@ -400,10 +403,15 @@ class ChatManager {
         // Join WebSocket room
         if (wsManager.isConnected) {
             wsManager.joinRoom(this.currentRoomId);
+            console.log(`Joined WebSocket room: ${this.currentRoomId}`);
+        } else {
+            console.log('WebSocket not connected, skipping room join');
         }
 
         // Load messages
+        console.log('Starting to load messages...');
         await this.loadMessages(contact.id);
+        console.log('Finished loading messages');
     }
 
     updateChatHeader(contact) {
@@ -443,20 +451,31 @@ class ChatManager {
     }
 
     async loadMessages(contactId) {
+        console.log(`Loading messages for contact ${contactId}, room ${this.currentRoomId}`);
+
         try {
             // First, load cached messages
             const cachedMessages = await storageManager.getMessages(this.currentRoomId);
+            console.log(`Found ${cachedMessages.length} cached messages for room ${this.currentRoomId}`);
+
             if (cachedMessages.length > 0) {
                 this.messages = cachedMessages;
                 this.renderMessages();
+                console.log('Rendered cached messages');
             }
 
-            // Then, fetch fresh messages from API
-            if (this.isOnline) {
+            // Always try to fetch fresh messages from API, regardless of online status
+            // This ensures we get the latest messages if the connection is available
+            try {
                 // Get the stored session token
                 const session = await window.electronAPI.auth.getStoredSession();
                 if (!session || !session.token) {
-                    console.error('No valid session token found for loading messages');
+                    console.warn('No valid session token found for loading messages, using cached messages only');
+                    // If we have cached messages, that's fine, otherwise show empty state
+                    if (cachedMessages.length === 0) {
+                        this.messages = [];
+                        this.renderMessages();
+                    }
                     return;
                 }
 
@@ -465,6 +484,7 @@ class ChatManager {
                     'Content-Type': 'application/json'
                 };
 
+                console.log(`Fetching fresh messages from API for contact ${contactId}`);
                 const response = await fetch(`${this.apiBaseUrl}/messages/${contactId}`, {
                     headers,
                     credentials: 'include'
@@ -472,32 +492,79 @@ class ChatManager {
 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.success && data.messages) {
-                        // Convert to our format
-                        const formattedMessages = data.messages.map(msg => ({
-                            senderId: msg.senderId || msg.sender_id,
-                            content: msg.content,
-                            timestamp: msg.createdAt || msg.created_at,
-                            roomId: this.currentRoomId
-                        }));
+                    console.log('API response received:', data);
+                    console.log('API response data.success:', data.success);
+                    console.log('API response data.messages length:', data.messages ? data.messages.length : 'undefined');
 
+                    if (data.success && data.messages) {
+                        console.log('Processing API messages...');
+                        console.log('Raw API messages (first 3):', data.messages.slice(0, 3));
+
+                        // Convert to our format
+                        const formattedMessages = data.messages.map((msg, index) => {
+                            const formatted = {
+                                senderId: msg.senderId || msg.sender_id,
+                                content: msg.content,
+                                timestamp: msg.createdAt || msg.created_at,
+                                roomId: this.currentRoomId
+                            };
+                            if (index < 3) {
+                                console.log(`Formatted message ${index}:`, formatted);
+                            }
+                            return formatted;
+                        });
+
+                        console.log(`Formatted ${formattedMessages.length} messages, reversing order...`);
                         this.messages = formattedMessages.reverse(); // API returns newest first
-                        
+                        console.log(`After reverse, messages length: ${this.messages.length}`);
+                        console.log('Final messages (first 3):', this.messages.slice(0, 3));
+
                         // Cache messages
+                        console.log('Saving messages to cache...');
                         await storageManager.saveMessages(this.currentRoomId, this.messages);
-                        
+                        console.log('Messages saved to cache');
+
+                        this.renderMessages();
+                        console.log('Rendered fresh messages from API');
+                    } else {
+                        console.warn('API response indicates failure or no messages:', data);
+                        console.warn('data.success:', data.success);
+                        console.warn('data.messages:', data.messages);
+                        // Keep using cached messages if API doesn't return valid data
+                        if (cachedMessages.length === 0) {
+                            this.messages = [];
+                            this.renderMessages();
+                        }
+                    }
+                } else {
+                    console.error(`API request failed with status ${response.status}: ${response.statusText}`);
+                    // Keep using cached messages if API fails
+                    if (cachedMessages.length === 0) {
+                        this.messages = [];
                         this.renderMessages();
                     }
+                }
+            } catch (apiError) {
+                console.error('Error fetching messages from API:', apiError);
+                // Keep using cached messages if API call fails
+                if (cachedMessages.length === 0) {
+                    this.messages = [];
+                    this.renderMessages();
                 }
             }
         } catch (error) {
             console.error('Error loading messages:', error);
+            // Fallback to empty messages if everything fails
+            this.messages = [];
+            this.renderMessages();
         }
     }
 
     renderMessages() {
         const messagesList = document.getElementById('messages-list');
         messagesList.innerHTML = '';
+
+        console.log(`Rendering ${this.messages.length} messages for room ${this.currentRoomId}`);
 
         if (this.messages.length === 0) {
             messagesList.innerHTML = `
@@ -506,6 +573,7 @@ class ChatManager {
                     <p>Send a message to start the conversation</p>
                 </div>
             `;
+            console.log('Displayed no messages placeholder');
             return;
         }
 
@@ -513,6 +581,8 @@ class ChatManager {
             const messageElement = this.createMessageElement(message);
             messagesList.appendChild(messageElement);
         });
+
+        console.log(`Successfully rendered ${this.messages.length} messages`);
 
         // Scroll to bottom
         this.scrollToBottom();
