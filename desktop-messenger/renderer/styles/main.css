@@ -840,8 +840,13 @@ body {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     gap: 5px;
-    max-width: 300px;
+    width: 300px;
+    max-width: calc(100vw - 60px); /* Ensure it doesn't exceed viewport width */
+    max-height: 200px;
+    overflow: hidden; /* Prevent content from flowing outside */
+    overflow-y: auto; /* Allow vertical scrolling if needed */
     z-index: 1000;
+    box-sizing: border-box; /* Include padding and border in width calculation */
 }
 
 .emoji-btn {
@@ -851,10 +856,34 @@ body {
     cursor: pointer;
     border-radius: 4px;
     font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0; /* Allow button to shrink */
+    overflow: hidden; /* Prevent emoji from overflowing button */
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
 }
 
 .emoji-btn:hover {
     background-color: #f8f9fa;
+}
+
+/* Responsive emoji picker for smaller screens */
+@media (max-width: 480px) {
+    .emoji-picker {
+        left: 10px;
+        right: 10px;
+        width: auto;
+        max-width: calc(100vw - 40px);
+        grid-template-columns: repeat(6, 1fr); /* Fewer columns on small screens */
+    }
+
+    .emoji-btn {
+        font-size: 16px;
+        padding: 6px;
+    }
 }
 
 /* Error messages */
