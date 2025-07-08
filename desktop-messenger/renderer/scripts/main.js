@@ -85,6 +85,47 @@ class MessengerApp {
         window.addEventListener('beforeunload', () => {
             this.cleanup();
         });
+
+        // Setup theme toggle functionality
+        this.setupThemeToggle();
+    }
+
+    setupThemeToggle() {
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const themeIcon = document.getElementById('theme-icon');
+
+        if (themeToggleBtn && themeIcon) {
+            // Update icon based on current theme
+            this.updateThemeIcon();
+
+            // Listen for theme changes
+            window.addEventListener('themeChanged', (e) => {
+                this.updateThemeIcon();
+            });
+
+            // Handle theme toggle click
+            themeToggleBtn.addEventListener('click', async () => {
+                try {
+                    const newTheme = await window.themeManager.toggleTheme();
+                    console.log('Theme switched to:', newTheme);
+                } catch (error) {
+                    console.error('Failed to toggle theme:', error);
+                }
+            });
+        }
+    }
+
+    updateThemeIcon() {
+        const themeIcon = document.getElementById('theme-icon');
+        if (themeIcon && window.themeManager) {
+            const isDark = window.themeManager.isDarkMode();
+            themeIcon.textContent = isDark ? '☀️' : '🌙';
+
+            const themeToggleBtn = document.getElementById('theme-toggle-btn');
+            if (themeToggleBtn) {
+                themeToggleBtn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+            }
+        }
     }
 
     setupLoginForm() {
