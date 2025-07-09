@@ -183,48 +183,67 @@ class MessengerApp {
     }
 
     setupSearchFunctionality() {
-        const searchInput = document.getElementById('search-input');
+        // Setup contact search (sidebar)
+        this.setupContactSearch();
 
-        // Initialize search state
-        this.searchState = {
+        // Setup message search (chat area)
+        this.setupMessageSearch();
+    }
+
+    setupContactSearch() {
+        const contactSearchInput = document.getElementById('contact-search-input');
+
+        contactSearchInput.addEventListener('input', Utils.debounce((e) => {
+            this.handleContactSearch(e.target.value);
+        }, 300));
+
+        contactSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.clearContactSearch();
+            }
+        });
+    }
+
+    setupMessageSearch() {
+        const messageSearchInput = document.getElementById('message-search-input');
+
+        // Initialize message search state
+        this.messageSearchState = {
             query: '',
             results: [],
             currentIndex: -1,
             isActive: false
         };
 
-        searchInput.addEventListener('input', Utils.debounce((e) => {
-            this.handleSearch(e.target.value);
+        messageSearchInput.addEventListener('input', Utils.debounce((e) => {
+            this.handleMessageSearch(e.target.value);
         }, 300));
 
-        // Handle search keyboard shortcuts
-        searchInput.addEventListener('keydown', (e) => {
+        // Handle message search keyboard shortcuts
+        messageSearchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.clearSearch();
+                this.clearMessageSearch();
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 if (e.shiftKey) {
-                    this.navigateSearchResults('prev');
+                    this.navigateMessageSearchResults('prev');
                 } else {
-                    this.navigateSearchResults('next');
+                    this.navigateMessageSearchResults('next');
                 }
             }
         });
 
-        // Setup search navigation buttons
-        this.setupSearchNavigation();
+        // Setup message search navigation buttons
+        this.setupMessageSearchNavigation();
     }
 
     async startChat() {
         try {
             console.log('Starting chat...');
-            
+
             // Initialize chat manager
             await chatManager.start();
-            
-            // Set up message search
-            this.setupMessageSearch();
-            
+
             console.log('Chat started successfully');
         } catch (error) {
             console.error('Error starting chat:', error);
@@ -232,82 +251,86 @@ class MessengerApp {
         }
     }
 
-    setupMessageSearch() {
-        // Message search is now integrated into the main search functionality
-        // This method is kept for compatibility but the actual search is handled
-        // by the enhanced setupSearchFunctionality method
-    }
-
-    async handleSearch(query) {
-        if (query.length >= 2) {
-            await this.performMessageSearch(query);
+    async handleContactSearch(query) {
+        // Only filter contacts in the sidebar
+        if (query.length >= 1) {
+            chatManager.filterContacts(query);
         } else {
-            this.clearSearchResults();
+            this.clearContactSearch();
         }
     }
 
-    setupSearchNavigation() {
-        const searchPrevBtn = document.getElementById('search-prev-btn');
-        const searchNextBtn = document.getElementById('search-next-btn');
-        const searchCloseBtn = document.getElementById('search-close-btn');
+    clearContactSearch() {
+        const contactSearchInput = document.getElementById('contact-search-input');
+        contactSearchInput.value = '';
+        chatManager.filterContacts(''); // Show all contacts
+    }
 
-        searchPrevBtn.addEventListener('click', () => this.navigateSearchResults('prev'));
-        searchNextBtn.addEventListener('click', () => this.navigateSearchResults('next'));
-        searchCloseBtn.addEventListener('click', () => this.clearSearch());
+    async handleMessageSearch(query) {
+        if (query.length >= 2) {
+            await this.performMessageSearch(query);
+        } else {
+            this.clearMessageSearchResults();
+        }
+    }
+
+    setupMessageSearchNavigation() {
+        const searchPrevBtn = document.getElementById('message-search-prev-btn');
+        const searchNextBtn = document.getElementById('message-search-next-btn');
+        const searchCloseBtn = document.getElementById('message-search-close-btn');
+
+        searchPrevBtn.addEventListener('click', () => this.navigateMessageSearchResults('prev'));
+        searchNextBtn.addEventListener('click', () => this.navigateMessageSearchResults('next'));
+        searchCloseBtn.addEventListener('click', () => this.clearMessageSearch());
     }
 
     async performMessageSearch(query) {
         try {
-            this.searchState.query = query;
+            this.messageSearchState.query = query;
 
             // Search in current conversation if one is selected
             if (chatManager.selectedContact) {
                 const messages = await chatManager.searchMessages(query);
-                this.searchState.results = messages;
-                this.searchState.currentIndex = -1;
-                this.displaySearchResults(messages, 'messages');
+                this.messageSearchState.results = messages;
+                this.messageSearchState.currentIndex = -1;
+                this.displayMessageSearchResults(messages);
             } else {
-                // If no conversation selected, just filter contacts
-                this.searchState.results = [];
-                this.hideSearchResults();
+                // If no conversation selected, clear results
+                this.messageSearchState.results = [];
+                this.hideMessageSearchResults();
             }
-
-            // Also filter contacts
-            chatManager.filterContacts(query);
 
         } catch (error) {
-            console.error('Error performing search:', error);
+            console.error('Error performing message search:', error);
         }
     }
 
-    displaySearchResults(results, type) {
-        if (type === 'messages') {
-            const searchResultsPanel = document.getElementById('search-results-panel');
-            const searchResultsCount = document.getElementById('search-results-count');
-            const searchResultsList = document.getElementById('search-results-list');
+    displayMessageSearchResults(results) {
+        const searchResultsPanel = document.getElementById('message-search-results-panel');
+        const searchResultsCount = document.getElementById('message-search-results-count');
+        const searchResultsList = document.getElementById('message-search-results-list');
 
+        if (results.length > 0) {
+            this.messageSearchState.isActive = true;
+            searchResultsPanel.style.display = 'block';
+            searchResultsCount.textContent = `${results.length} result${results.length > 1 ? 's' : ''}`;
+
+            // Populate search results list
+            this.populateMessageSearchResultsList(results);
+
+            // Highlight first result
             if (results.length > 0) {
-                this.searchState.isActive = true;
-                searchResultsPanel.style.display = 'block';
-                searchResultsCount.textContent = `${results.length} result${results.length > 1 ? 's' : ''}`;
-
-                // Populate search results list
-                this.populateSearchResultsList(results);
-
-                // Highlight first result
-                if (results.length > 0) {
-                    this.searchState.currentIndex = 0;
-                    this.highlightSearchResult(0);
-                }
-            } else {
-                this.hideSearchResults();
-                Utils.showToast('No messages found', 'info');
+                this.messageSearchState.currentIndex = 0;
+                this.highlightMessageSearchResult(0);
             }
+        } else {
+            this.hideMessageSearchResults();
+            Utils.showToast('No messages found', 'info');
         }
     }
 
-    populateSearchResultsList(results) {
-        const searchResultsList = document.getElementById('search-results-list');
+    populateMessageSearchResultsList(results) {
+        const searchResultsList = document.getElementById('message-search-results-list');
         searchResultsList.innerHTML = '';
 
         results.forEach((message, index) => {
@@ -316,7 +339,7 @@ class MessengerApp {
             resultItem.setAttribute('data-index', index);
 
             const time = new Date(message.timestamp).toLocaleString();
-            const preview = this.getMessagePreview(message.content, this.searchState.query);
+            const preview = this.getMessagePreview(message.content, this.messageSearchState.query);
 
             resultItem.innerHTML = `
                 <div class="search-result-content">
@@ -326,8 +349,8 @@ class MessengerApp {
             `;
 
             resultItem.addEventListener('click', () => {
-                this.searchState.currentIndex = index;
-                this.highlightSearchResult(index);
+                this.messageSearchState.currentIndex = index;
+                this.highlightMessageSearchResult(index);
                 this.scrollToMessage(message);
             });
 
@@ -438,8 +461,8 @@ class MessengerApp {
     }
 
     hideSearchResults() {
-        const searchResultsPanel = document.getElementById('search-results-panel');
-        searchResultsPanel.style.display = 'none';
+        // This method is kept for compatibility but the old search panel no longer exists
+        // The functionality is now handled by hideMessageSearchResults()
         this.searchState.isActive = false;
         this.searchState.currentIndex = -1;
 
@@ -466,52 +489,123 @@ class MessengerApp {
     }
 
     clearSearch() {
-        const searchInput = document.getElementById('search-input');
-        searchInput.value = '';
-        this.clearSearchResults();
+        // This method is kept for compatibility but now delegates to specific search clearing
+        this.clearContactSearch();
+        this.clearMessageSearch();
+    }
+
+    // Message search methods
+    navigateMessageSearchResults(direction) {
+        if (!this.messageSearchState.isActive || this.messageSearchState.results.length === 0) return;
+
+        const totalResults = this.messageSearchState.results.length;
+
+        if (direction === 'next') {
+            this.messageSearchState.currentIndex = (this.messageSearchState.currentIndex + 1) % totalResults;
+        } else {
+            this.messageSearchState.currentIndex = this.messageSearchState.currentIndex <= 0
+                ? totalResults - 1
+                : this.messageSearchState.currentIndex - 1;
+        }
+
+        this.highlightMessageSearchResult(this.messageSearchState.currentIndex);
+        this.scrollToMessage(this.messageSearchState.results[this.messageSearchState.currentIndex]);
+    }
+
+    highlightMessageSearchResult(index) {
+        // Remove previous highlights
+        document.querySelectorAll('.search-result-item.active').forEach(el => {
+            el.classList.remove('active');
+        });
+
+        // Highlight current result
+        const resultItems = document.querySelectorAll('#message-search-results-list .search-result-item');
+        if (resultItems[index]) {
+            resultItems[index].classList.add('active');
+        }
+    }
+
+    clearMessageSearchResults() {
+        this.messageSearchState = {
+            query: '',
+            results: [],
+            currentIndex: -1,
+            isActive: false
+        };
+
+        this.hideMessageSearchResults();
+    }
+
+    clearMessageSearch() {
+        const messageSearchInput = document.getElementById('message-search-input');
+        messageSearchInput.value = '';
+        this.clearMessageSearchResults();
+    }
+
+    hideMessageSearchResults() {
+        const searchResultsPanel = document.getElementById('message-search-results-panel');
+        searchResultsPanel.style.display = 'none';
+
+        // Remove message highlights
+        document.querySelectorAll('.message.search-highlighted').forEach(el => {
+            el.classList.remove('search-highlighted');
+        });
     }
 
     handleKeyboardShortcuts(e) {
-        // Ctrl/Cmd + K: Focus search
+        // Ctrl/Cmd + K: Focus contact search
         if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
             e.preventDefault();
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.focus();
+            const contactSearchInput = document.getElementById('contact-search-input');
+            if (contactSearchInput) {
+                contactSearchInput.focus();
             }
         }
 
-        // Ctrl/Cmd + F: Focus search (alternative)
+        // Ctrl/Cmd + F: Focus message search (if chat is open)
         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
             e.preventDefault();
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.focus();
+            const messageSearchInput = document.getElementById('message-search-input');
+            if (messageSearchInput && chatManager.selectedContact) {
+                messageSearchInput.focus();
+            } else {
+                // Fallback to contact search if no chat is open
+                const contactSearchInput = document.getElementById('contact-search-input');
+                if (contactSearchInput) {
+                    contactSearchInput.focus();
+                }
             }
         }
 
         // F3 or Ctrl/Cmd + G: Next search result
         if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && e.key === 'g' && !e.shiftKey)) {
             e.preventDefault();
-            if (this.searchState.isActive) {
-                this.navigateSearchResults('next');
+            if (this.messageSearchState.isActive) {
+                this.navigateMessageSearchResults('next');
             }
         }
 
         // Shift + F3 or Ctrl/Cmd + Shift + G: Previous search result
         if ((e.key === 'F3' && e.shiftKey) || ((e.ctrlKey || e.metaKey) && e.key === 'g' && e.shiftKey)) {
             e.preventDefault();
-            if (this.searchState.isActive) {
-                this.navigateSearchResults('prev');
+            if (this.messageSearchState.isActive) {
+                this.navigateMessageSearchResults('prev');
             }
         }
 
         // Escape: Clear search or close modals
         if (e.key === 'Escape') {
-            const searchInput = document.getElementById('search-input');
-            // Only handle escape if search input is not focused (to avoid double handling)
-            if (searchInput && searchInput.value && document.activeElement !== searchInput) {
-                this.clearSearch();
+            const contactSearchInput = document.getElementById('contact-search-input');
+            const messageSearchInput = document.getElementById('message-search-input');
+
+            // Clear contact search if it has value and is not focused
+            if (contactSearchInput && contactSearchInput.value && document.activeElement !== contactSearchInput) {
+                this.clearContactSearch();
+            }
+
+            // Clear message search if it has value and is not focused
+            if (messageSearchInput && messageSearchInput.value && document.activeElement !== messageSearchInput) {
+                this.clearMessageSearch();
             }
 
             // Close emoji picker if open
