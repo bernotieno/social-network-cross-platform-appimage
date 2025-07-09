@@ -77,20 +77,7 @@
                 </div>
                 
                 <div class="search-container">
-                    <input type="text" id="search-input" placeholder="Search conversations..." class="search-input">
-                    <div id="search-results-panel" class="search-results-panel" style="display: none;">
-                        <div class="search-results-header">
-                            <span id="search-results-count">0 results</span>
-                            <div class="search-navigation">
-                                <button id="search-prev-btn" class="btn btn-icon search-nav-btn" title="Previous result (Shift+Enter)">↑</button>
-                                <button id="search-next-btn" class="btn btn-icon search-nav-btn" title="Next result (Enter)">↓</button>
-                                <button id="search-close-btn" class="btn btn-icon search-nav-btn" title="Close search (Escape)">✕</button>
-                            </div>
-                        </div>
-                        <div id="search-results-list" class="search-results-list">
-                            <!-- Search results will be populated here -->
-                        </div>
-                    </div>
+                    <input type="text" id="contact-search-input" placeholder="Search contacts..." class="search-input">
                 </div>
                 
                 <div class="contacts-list" id="contacts-list">
@@ -113,6 +100,22 @@
                             <div class="contact-details">
                                 <h3 id="contact-name">Contact Name</h3>
                                 <p id="contact-status" class="contact-status">Online</p>
+                            </div>
+                        </div>
+                        <div class="chat-search-container">
+                            <input type="text" id="message-search-input" placeholder="Search messages..." class="chat-search-input">
+                            <div id="message-search-results-panel" class="message-search-results-panel" style="display: none;">
+                                <div class="search-results-header">
+                                    <span id="message-search-results-count">0 results</span>
+                                    <div class="search-navigation">
+                                        <button id="message-search-prev-btn" class="btn btn-icon search-nav-btn" title="Previous result (Shift+Enter)">↑</button>
+                                        <button id="message-search-next-btn" class="btn btn-icon search-nav-btn" title="Next result (Enter)">↓</button>
+                                        <button id="message-search-close-btn" class="btn btn-icon search-nav-btn" title="Close search (Escape)">✕</button>
+                                    </div>
+                                </div>
+                                <div id="message-search-results-list" class="search-results-list">
+                                    <!-- Message search results will be populated here -->
+                                </div>
                             </div>
                         </div>
                     </div>
