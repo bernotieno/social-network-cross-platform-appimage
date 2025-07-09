@@ -74,11 +74,11 @@ class MessengerApp {
 
         // Handle online/offline events
         window.addEventListener('online', () => {
-            Utils.showToast('Connection restored', 'success');
+            this.handleOnlineEvent();
         });
 
         window.addEventListener('offline', () => {
-            Utils.showToast('Connection lost', 'warning');
+            this.handleOfflineEvent();
         });
 
         // Handle unload to cleanup
@@ -184,7 +184,15 @@ class MessengerApp {
 
     setupSearchFunctionality() {
         const searchInput = document.getElementById('search-input');
-        
+
+        // Initialize search state
+        this.searchState = {
+            query: '',
+            results: [],
+            currentIndex: -1,
+            isActive: false
+        };
+
         searchInput.addEventListener('input', Utils.debounce((e) => {
             this.handleSearch(e.target.value);
         }, 300));
@@ -192,10 +200,19 @@ class MessengerApp {
         // Handle search keyboard shortcuts
         searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                searchInput.value = '';
                 this.clearSearch();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    this.navigateSearchResults('prev');
+                } else {
+                    this.navigateSearchResults('next');
+                }
             }
         });
+
+        // Setup search navigation buttons
+        this.setupSearchNavigation();
     }
 
     async startChat() {
@@ -216,59 +233,242 @@ class MessengerApp {
     }
 
     setupMessageSearch() {
-        // Add search functionality to the existing search input
-        const searchInput = document.getElementById('search-input');
-        
-        // Override the existing search to include message search
-        searchInput.addEventListener('input', Utils.debounce(async (e) => {
-            const query = e.target.value.trim();
-            
-            if (query.length >= 2) {
-                await this.performMessageSearch(query);
-            } else {
-                this.clearSearch();
-            }
-        }, 300));
+        // Message search is now integrated into the main search functionality
+        // This method is kept for compatibility but the actual search is handled
+        // by the enhanced setupSearchFunctionality method
+    }
+
+    async handleSearch(query) {
+        if (query.length >= 2) {
+            await this.performMessageSearch(query);
+        } else {
+            this.clearSearchResults();
+        }
+    }
+
+    setupSearchNavigation() {
+        const searchPrevBtn = document.getElementById('search-prev-btn');
+        const searchNextBtn = document.getElementById('search-next-btn');
+        const searchCloseBtn = document.getElementById('search-close-btn');
+
+        searchPrevBtn.addEventListener('click', () => this.navigateSearchResults('prev'));
+        searchNextBtn.addEventListener('click', () => this.navigateSearchResults('next'));
+        searchCloseBtn.addEventListener('click', () => this.clearSearch());
     }
 
     async performMessageSearch(query) {
         try {
-            this.currentSearchQuery = query;
-            
+            this.searchState.query = query;
+
             // Search in current conversation if one is selected
             if (chatManager.selectedContact) {
                 const messages = await chatManager.searchMessages(query);
+                this.searchState.results = messages;
+                this.searchState.currentIndex = -1;
                 this.displaySearchResults(messages, 'messages');
+            } else {
+                // If no conversation selected, just filter contacts
+                this.searchState.results = [];
+                this.hideSearchResults();
             }
-            
+
             // Also filter contacts
             chatManager.filterContacts(query);
-            
+
         } catch (error) {
             console.error('Error performing search:', error);
         }
     }
 
     displaySearchResults(results, type) {
-        // For now, we'll just highlight matching messages
-        // In a more advanced implementation, we could show a search results panel
-        
-        if (type === 'messages' && results.length > 0) {
-            console.log(`Found ${results.length} messages matching "${this.currentSearchQuery}"`);
-            
-            // You could implement a search results overlay here
-            Utils.showToast(`Found ${results.length} messages`, 'info');
+        if (type === 'messages') {
+            const searchResultsPanel = document.getElementById('search-results-panel');
+            const searchResultsCount = document.getElementById('search-results-count');
+            const searchResultsList = document.getElementById('search-results-list');
+
+            if (results.length > 0) {
+                this.searchState.isActive = true;
+                searchResultsPanel.style.display = 'block';
+                searchResultsCount.textContent = `${results.length} result${results.length > 1 ? 's' : ''}`;
+
+                // Populate search results list
+                this.populateSearchResultsList(results);
+
+                // Highlight first result
+                if (results.length > 0) {
+                    this.searchState.currentIndex = 0;
+                    this.highlightSearchResult(0);
+                }
+            } else {
+                this.hideSearchResults();
+                Utils.showToast('No messages found', 'info');
+            }
         }
     }
 
-    clearSearch() {
-        this.currentSearchQuery = '';
-        this.searchResults = [];
-        
+    populateSearchResultsList(results) {
+        const searchResultsList = document.getElementById('search-results-list');
+        searchResultsList.innerHTML = '';
+
+        results.forEach((message, index) => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'search-result-item';
+            resultItem.setAttribute('data-index', index);
+
+            const time = new Date(message.timestamp).toLocaleString();
+            const preview = this.getMessagePreview(message.content, this.searchState.query);
+
+            resultItem.innerHTML = `
+                <div class="search-result-content">
+                    <div class="search-result-preview">${preview}</div>
+                    <div class="search-result-time">${time}</div>
+                </div>
+            `;
+
+            resultItem.addEventListener('click', () => {
+                this.searchState.currentIndex = index;
+                this.highlightSearchResult(index);
+                this.scrollToMessage(message);
+            });
+
+            searchResultsList.appendChild(resultItem);
+        });
+    }
+
+    getMessagePreview(content, query) {
+        const maxLength = 100;
+        const queryIndex = content.toLowerCase().indexOf(query.toLowerCase());
+
+        if (queryIndex === -1) return Utils.escapeHtml(content.substring(0, maxLength));
+
+        // Show context around the found term
+        const start = Math.max(0, queryIndex - 30);
+        const end = Math.min(content.length, queryIndex + query.length + 30);
+        let preview = content.substring(start, end);
+
+        if (start > 0) preview = '...' + preview;
+        if (end < content.length) preview = preview + '...';
+
+        // Highlight the search term
+        const regex = new RegExp(`(${Utils.escapeHtml(query)})`, 'gi');
+        preview = Utils.escapeHtml(preview).replace(regex, '<mark>$1</mark>');
+
+        return preview;
+    }
+
+    navigateSearchResults(direction) {
+        if (!this.searchState.isActive || this.searchState.results.length === 0) return;
+
+        const totalResults = this.searchState.results.length;
+
+        if (direction === 'next') {
+            this.searchState.currentIndex = (this.searchState.currentIndex + 1) % totalResults;
+        } else if (direction === 'prev') {
+            this.searchState.currentIndex = this.searchState.currentIndex <= 0
+                ? totalResults - 1
+                : this.searchState.currentIndex - 1;
+        }
+
+        this.highlightSearchResult(this.searchState.currentIndex);
+        this.scrollToMessage(this.searchState.results[this.searchState.currentIndex]);
+    }
+
+    highlightSearchResult(index) {
+        // Update search results list highlighting
+        const resultItems = document.querySelectorAll('.search-result-item');
+        resultItems.forEach((item, i) => {
+            if (i === index) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        // Update counter
+        const searchResultsCount = document.getElementById('search-results-count');
+        const total = this.searchState.results.length;
+        searchResultsCount.textContent = `${index + 1} of ${total} result${total > 1 ? 's' : ''}`;
+    }
+
+    scrollToMessage(message) {
+        // Use ChatManager's findMessageElement method for better accuracy
+        const targetElement = chatManager.findMessageElement(message);
+
+        if (targetElement) {
+            // Remove previous highlights
+            document.querySelectorAll('.message.search-highlighted').forEach(el => {
+                el.classList.remove('search-highlighted');
+            });
+
+            // Highlight current message
+            targetElement.classList.add('search-highlighted');
+
+            // Scroll to message
+            targetElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+
+            // Highlight search term within the message
+            this.highlightSearchTermInMessage(targetElement, this.searchState.query);
+
+            // Show success feedback
+            Utils.showToast('Message found', 'success', 1500);
+        } else {
+            Utils.showToast('Message not visible in current conversation', 'warning');
+        }
+    }
+
+    highlightSearchTermInMessage(messageElement, query) {
+        const contentElement = messageElement.querySelector('.message-content');
+        if (!contentElement) return;
+
+        const originalText = contentElement.textContent;
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        const highlightedText = Utils.escapeHtml(originalText).replace(regex, '<mark class="search-highlight">$1</mark>');
+
+        contentElement.innerHTML = highlightedText;
+
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+            if (contentElement.innerHTML.includes('search-highlight')) {
+                contentElement.textContent = originalText;
+            }
+        }, 3000);
+    }
+
+    hideSearchResults() {
+        const searchResultsPanel = document.getElementById('search-results-panel');
+        searchResultsPanel.style.display = 'none';
+        this.searchState.isActive = false;
+        this.searchState.currentIndex = -1;
+
+        // Remove message highlights
+        document.querySelectorAll('.message.search-highlighted').forEach(el => {
+            el.classList.remove('search-highlighted');
+        });
+    }
+
+    clearSearchResults() {
+        this.searchState = {
+            query: '',
+            results: [],
+            currentIndex: -1,
+            isActive: false
+        };
+
+        this.hideSearchResults();
+
         // Reset contact list
         if (chatManager) {
             chatManager.renderContacts();
         }
+    }
+
+    clearSearch() {
+        const searchInput = document.getElementById('search-input');
+        searchInput.value = '';
+        this.clearSearchResults();
     }
 
     handleKeyboardShortcuts(e) {
@@ -281,14 +481,39 @@ class MessengerApp {
             }
         }
 
+        // Ctrl/Cmd + F: Focus search (alternative)
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.focus();
+            }
+        }
+
+        // F3 or Ctrl/Cmd + G: Next search result
+        if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && e.key === 'g' && !e.shiftKey)) {
+            e.preventDefault();
+            if (this.searchState.isActive) {
+                this.navigateSearchResults('next');
+            }
+        }
+
+        // Shift + F3 or Ctrl/Cmd + Shift + G: Previous search result
+        if ((e.key === 'F3' && e.shiftKey) || ((e.ctrlKey || e.metaKey) && e.key === 'g' && e.shiftKey)) {
+            e.preventDefault();
+            if (this.searchState.isActive) {
+                this.navigateSearchResults('prev');
+            }
+        }
+
         // Escape: Clear search or close modals
         if (e.key === 'Escape') {
             const searchInput = document.getElementById('search-input');
-            if (searchInput && searchInput.value) {
-                searchInput.value = '';
+            // Only handle escape if search input is not focused (to avoid double handling)
+            if (searchInput && searchInput.value && document.activeElement !== searchInput) {
                 this.clearSearch();
             }
-            
+
             // Close emoji picker if open
             const emojiPicker = document.getElementById('emoji-picker');
             if (emojiPicker && emojiPicker.style.display !== 'none') {
@@ -371,6 +596,47 @@ class MessengerApp {
     async refreshData() {
         if (authManager.isLoggedIn() && chatManager) {
             await chatManager.loadContacts();
+        }
+    }
+
+    handleOnlineEvent() {
+        Utils.showToast('Connection restored', 'success');
+
+        // Update online status in chat manager
+        if (chatManager) {
+            chatManager.isOnline = true;
+            // Flush message queue and retry failed messages
+            chatManager.flushMessageQueue();
+        }
+
+        // Hide offline indicator
+        const offlineIndicator = document.getElementById('offline-indicator');
+        if (offlineIndicator) {
+            offlineIndicator.style.display = 'none';
+        }
+
+        // Reconnect WebSocket if needed
+        if (wsManager && !wsManager.isConnected && authManager.isLoggedIn()) {
+            authManager.getCurrentSession().then(session => {
+                if (session && session.token) {
+                    wsManager.connect(session.token);
+                }
+            });
+        }
+    }
+
+    handleOfflineEvent() {
+        Utils.showToast('Connection lost - messages will be queued', 'warning');
+
+        // Update online status in chat manager
+        if (chatManager) {
+            chatManager.isOnline = false;
+        }
+
+        // Show offline indicator
+        const offlineIndicator = document.getElementById('offline-indicator');
+        if (offlineIndicator) {
+            offlineIndicator.style.display = 'block';
         }
     }
 
