@@ -67,9 +67,12 @@ class ChatManager {
         });
 
         // UI event listeners
-        document.getElementById('search-input').addEventListener('input', (e) => {
-            this.filterContacts(e.target.value);
-        });
+        const contactSearchInput = document.getElementById('contact-search-input');
+        if (contactSearchInput) {
+            contactSearchInput.addEventListener('input', (e) => {
+                this.filterContacts(e.target.value);
+            });
+        }
 
         document.getElementById('message-form').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -712,10 +715,9 @@ class ChatManager {
             });
 
             if (response.ok) {
-                // Send via WebSocket for real-time delivery
-                if (wsManager.isConnected) {
-                    wsManager.sendMessage(this.currentRoomId, message.content);
-                }
+                // Don't send via WebSocket for our own messages - the API handles persistence
+                // and other users will receive the message via WebSocket from the server
+                // This prevents duplicate messages when the WebSocket echoes back our own message
 
                 // Mark as sent
                 message.status = 'sent';
@@ -898,12 +900,58 @@ class ChatManager {
                     roomId: roomId
                 };
 
+                console.log('WebSocket message received:', {
+                    content: message.content,
+                    senderId: message.senderId,
+                    timestamp: message.timestamp,
+                    currentUserId: authManager.getCurrentUser().id
+                });
+
                 // Check if message already exists (avoid duplicates)
-                const exists = this.messages.some(msg =>
-                    msg.content === message.content &&
-                    msg.senderId === message.senderId &&
-                    Math.abs(new Date(msg.timestamp) - new Date(message.timestamp)) < 5000
-                );
+                // For messages from our own user, be more strict about duplicate detection
+                const currentUserId = authManager.getCurrentUser().id;
+                const isOwnMessage = message.senderId === currentUserId;
+
+                const exists = this.messages.some(msg => {
+                    // If both messages have IDs, compare by ID
+                    if (msg.id && message.id) {
+                        console.log('Comparing by ID:', msg.id, '===', message.id);
+                        return msg.id === message.id;
+                    }
+
+                    // For our own messages, check content and sender match exactly
+                    // (don't rely on timestamp since server timestamp may differ significantly)
+                    if (isOwnMessage && msg.senderId === currentUserId) {
+                        const contentMatch = msg.content === message.content;
+                        console.log('Own message content comparison:', {
+                            existing: msg.content,
+                            incoming: message.content,
+                            match: contentMatch
+                        });
+                        return contentMatch;
+                    }
+
+                    // For other users' messages, use content/sender/timestamp comparison
+                    const contentMatch = msg.content === message.content;
+                    const senderMatch = msg.senderId === message.senderId;
+                    const timeDiff = Math.abs(new Date(msg.timestamp) - new Date(message.timestamp));
+                    const timeMatch = timeDiff < 10000;
+
+                    if (contentMatch && senderMatch) {
+                        console.log('Other user message comparison:', {
+                            contentMatch,
+                            senderMatch,
+                            timeDiff,
+                            timeMatch,
+                            existingTime: msg.timestamp,
+                            incomingTime: message.timestamp
+                        });
+                    }
+
+                    return contentMatch && senderMatch && timeMatch;
+                });
+
+                console.log('Duplicate check result:', exists);
 
                 if (!exists) {
                     this.messages.push(message);
