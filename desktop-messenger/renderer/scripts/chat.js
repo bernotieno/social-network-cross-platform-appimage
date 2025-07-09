@@ -32,6 +32,9 @@ class ChatManager {
         // Load cached data
         await this.loadCachedData();
 
+        // Load failed messages and retry if online
+        await this.loadFailedMessagesOnStartup();
+
         this.isInitialized = true;
     }
 
@@ -591,20 +594,48 @@ class ChatManager {
     createMessageElement(message) {
         const div = document.createElement('div');
         const isOwn = message.senderId === authManager.getCurrentUser().id;
-        
-        div.className = `message ${isOwn ? 'own' : 'other'}`;
-        if (message.pending) {
-            div.classList.add('sending');
-        }
 
-        const time = new Date(message.timestamp).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        div.className = `message ${isOwn ? 'own' : 'other'}`;
+        div.setAttribute('data-message-id', message.id || '');
+
+        // Add status classes
+        const status = message.status || (message.pending ? 'sending' : 'sent');
+        div.classList.add(`status-${status}`);
+
+        const time = new Date(message.timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
         });
+
+        let statusIndicator = '';
+        let retryButton = '';
+
+        // Add status indicators for own messages
+        if (isOwn) {
+            switch (status) {
+                case 'sending':
+                    statusIndicator = '<span class="message-status sending">⏳ Sending...</span>';
+                    break;
+                case 'queued':
+                    statusIndicator = '<span class="message-status queued">📤 Queued</span>';
+                    break;
+                case 'sent':
+                    statusIndicator = '<span class="message-status sent">✓ Sent</span>';
+                    break;
+                case 'failed':
+                    statusIndicator = `<span class="message-status failed">❌ Failed${message.errorMessage ? `: ${message.errorMessage}` : ''}</span>`;
+                    retryButton = `<button class="retry-btn" onclick="chatManager.retryMessage('${message.id}')" title="Retry sending message">🔄 Retry</button>`;
+                    break;
+            }
+        }
 
         div.innerHTML = `
             <div class="message-content">${this.escapeHtml(message.content)}</div>
-            <div class="message-time">${time}</div>
+            <div class="message-footer">
+                <div class="message-time">${time}</div>
+                ${statusIndicator}
+                ${retryButton}
+            </div>
         `;
 
         return div;
@@ -613,7 +644,7 @@ class ChatManager {
     async sendMessage() {
         const input = document.getElementById('message-input');
         const content = input.value.trim();
-        
+
         if (!content || !this.selectedContact) return;
 
         // Clear input immediately
@@ -622,12 +653,15 @@ class ChatManager {
         // Stop typing indicator
         this.stopTyping();
 
+        const messageId = this.generateMessageId();
         const message = {
+            id: messageId,
             senderId: authManager.getCurrentUser().id,
             content: content,
             timestamp: new Date().toISOString(),
             roomId: this.currentRoomId,
-            pending: !this.isOnline
+            status: this.isOnline ? 'sending' : 'queued', // 'sending', 'sent', 'failed', 'queued'
+            retryCount: 0
         };
 
         // Add to messages immediately for optimistic UI
@@ -635,89 +669,218 @@ class ChatManager {
         this.renderMessages();
 
         if (this.isOnline) {
-            try {
-                // Get the stored session token
-                const session = await window.electronAPI.auth.getStoredSession();
-                if (!session || !session.token) {
-                    console.error('No valid session token found for sending message');
-                    message.pending = true;
-                    this.renderMessages();
-                    return;
-                }
-
-                // Send via API
-                const response = await fetch(`${this.apiBaseUrl}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${session.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        receiverId: this.selectedContact.id,
-                        content: content
-                    })
-                });
-
-                if (response.ok) {
-                    // Send via WebSocket for real-time delivery
-                    if (wsManager.isConnected) {
-                        wsManager.sendMessage(this.currentRoomId, content);
-                    }
-
-                    // Remove pending flag
-                    message.pending = false;
-                    this.renderMessages();
-
-                    // Cache message
-                    await storageManager.saveMessage(this.currentRoomId, message);
-                } else {
-                    throw new Error('Failed to send message');
-                }
-            } catch (error) {
-                console.error('Error sending message:', error);
-                // Add to queue for retry
-                this.messageQueue.push({
-                    receiverId: this.selectedContact.id,
-                    content: content,
-                    timestamp: message.timestamp
-                });
-            }
+            await this.attemptSendMessage(message);
         } else {
             // Add to queue for when back online
-            this.messageQueue.push({
-                receiverId: this.selectedContact.id,
-                content: content,
-                timestamp: message.timestamp
+            this.addToMessageQueue(message);
+            Utils.showToast('Message queued - will send when online', 'warning');
+        }
+    }
+
+    generateMessageId() {
+        return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    }
+
+    async attemptSendMessage(message, isRetry = false) {
+        try {
+            // Get the stored session token
+            const session = await window.electronAPI.auth.getStoredSession();
+            if (!session || !session.token) {
+                console.error('No valid session token found for sending message');
+                this.markMessageAsFailed(message.id, 'Authentication failed');
+                return;
+            }
+
+            // Update status to sending if it's a retry
+            if (isRetry) {
+                message.status = 'sending';
+                this.renderMessages();
+            }
+
+            // Send via API
+            const response = await fetch(`${this.apiBaseUrl}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.token}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    receiverId: this.selectedContact.id,
+                    content: message.content
+                })
             });
+
+            if (response.ok) {
+                // Send via WebSocket for real-time delivery
+                if (wsManager.isConnected) {
+                    wsManager.sendMessage(this.currentRoomId, message.content);
+                }
+
+                // Mark as sent
+                message.status = 'sent';
+                this.renderMessages();
+
+                // Cache message
+                await storageManager.saveMessage(this.currentRoomId, message);
+
+                // Remove from failed messages storage if it was there
+                await this.removeFromFailedMessages(message.id);
+
+                if (isRetry) {
+                    Utils.showToast('Message sent successfully', 'success');
+                }
+            } else {
+                throw new Error(`Server error: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+            this.markMessageAsFailed(message.id, error.message);
+
+            // Add to persistent failed messages storage
+            await this.saveFailedMessage(message);
+        }
+    }
+
+    markMessageAsFailed(messageId, errorMessage = 'Failed to send') {
+        const message = this.messages.find(msg => msg.id === messageId);
+        if (message) {
+            message.status = 'failed';
+            message.errorMessage = errorMessage;
+            this.renderMessages();
+            Utils.showToast(`Message failed to send: ${errorMessage}`, 'error');
+        }
+    }
+
+    addToMessageQueue(message) {
+        this.messageQueue.push({
+            id: message.id,
+            receiverId: this.selectedContact.id,
+            content: message.content,
+            timestamp: message.timestamp,
+            roomId: message.roomId
+        });
+    }
+
+    async saveFailedMessage(message) {
+        try {
+            const failedMessages = await this.getFailedMessages();
+            failedMessages.push({
+                id: message.id,
+                senderId: message.senderId,
+                receiverId: this.selectedContact.id,
+                content: message.content,
+                timestamp: message.timestamp,
+                roomId: message.roomId,
+                retryCount: message.retryCount || 0,
+                errorMessage: message.errorMessage
+            });
+            await window.electronAPI.secureStorage.setItem('failedMessages', JSON.stringify(failedMessages));
+        } catch (error) {
+            console.error('Error saving failed message:', error);
+        }
+    }
+
+    async getFailedMessages() {
+        try {
+            const result = await window.electronAPI.secureStorage.getItem('failedMessages');
+            return result.value ? JSON.parse(result.value) : [];
+        } catch (error) {
+            console.error('Error getting failed messages:', error);
+            return [];
+        }
+    }
+
+    async removeFromFailedMessages(messageId) {
+        try {
+            const failedMessages = await this.getFailedMessages();
+            const updatedMessages = failedMessages.filter(msg => msg.id !== messageId);
+            await window.electronAPI.secureStorage.setItem('failedMessages', JSON.stringify(updatedMessages));
+        } catch (error) {
+            console.error('Error removing failed message:', error);
+        }
+    }
+
+    async retryMessage(messageId) {
+        const message = this.messages.find(msg => msg.id === messageId);
+        if (!message) {
+            console.error('Message not found for retry:', messageId);
+            return;
+        }
+
+        if (!this.isOnline) {
+            Utils.showToast('Cannot retry - you are offline', 'warning');
+            return;
+        }
+
+        message.retryCount = (message.retryCount || 0) + 1;
+        if (message.retryCount > 3) {
+            Utils.showToast('Maximum retry attempts reached', 'error');
+            return;
+        }
+
+        Utils.showToast('Retrying message...', 'info');
+        await this.attemptSendMessage(message, true);
+    }
+
+    async loadFailedMessagesOnStartup() {
+        try {
+            const failedMessages = await this.getFailedMessages();
+
+            if (failedMessages.length > 0) {
+                console.log(`Found ${failedMessages.length} failed messages from previous session`);
+
+                // Show notification about failed messages
+                Utils.showToast(`${failedMessages.length} messages failed to send previously`, 'warning', 5000);
+
+                // If online, attempt to retry them
+                if (this.isOnline) {
+                    setTimeout(() => {
+                        this.retryFailedMessages();
+                    }, 2000); // Wait 2 seconds before retrying
+                }
+            }
+        } catch (error) {
+            console.error('Error loading failed messages on startup:', error);
         }
     }
 
     async flushMessageQueue() {
-        if (!this.isOnline || this.messageQueue.length === 0) return;
+        if (!this.isOnline) return;
 
-        const queue = [...this.messageQueue];
-        this.messageQueue = [];
+        // Process regular message queue
+        if (this.messageQueue.length > 0) {
+            const queue = [...this.messageQueue];
+            this.messageQueue = [];
 
-        for (const queuedMessage of queue) {
-            try {
-                const response = await fetch(`${this.apiBaseUrl}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(queuedMessage)
-                });
-
-                if (!response.ok) {
-                    // Re-add to queue if failed
-                    this.messageQueue.push(queuedMessage);
+            for (const queuedMessage of queue) {
+                const message = this.messages.find(msg => msg.id === queuedMessage.id);
+                if (message) {
+                    await this.attemptSendMessage(message, true);
                 }
-            } catch (error) {
-                console.error('Error sending queued message:', error);
-                this.messageQueue.push(queuedMessage);
             }
+        }
+
+        // Process failed messages
+        await this.retryFailedMessages();
+    }
+
+    async retryFailedMessages() {
+        try {
+            const failedMessages = await this.getFailedMessages();
+
+            for (const failedMsg of failedMessages) {
+                // Find the message in current messages
+                const message = this.messages.find(msg => msg.id === failedMsg.id);
+                if (message && message.status === 'failed') {
+                    // Only retry if not exceeded max attempts
+                    if ((failedMsg.retryCount || 0) < 3) {
+                        await this.attemptSendMessage(message, true);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error retrying failed messages:', error);
         }
     }
 
@@ -981,7 +1144,52 @@ class ChatManager {
     }
 
     async searchMessages(query) {
-        return await storageManager.searchMessages(query, this.currentRoomId);
+        const results = await storageManager.searchMessages(query, this.currentRoomId);
+
+        // Ensure results have IDs for navigation
+        return results.map(message => {
+            if (!message.id) {
+                // Generate a temporary ID based on content and timestamp for older messages
+                message.id = `temp_${btoa(message.content + message.timestamp).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16)}`;
+            }
+            return message;
+        });
+    }
+
+    // Method to find message element by content and timestamp (for messages without IDs)
+    findMessageElement(message) {
+        const messageElements = document.querySelectorAll('.message');
+
+        for (const element of messageElements) {
+            const messageId = element.getAttribute('data-message-id');
+            if (messageId === message.id) {
+                return element;
+            }
+
+            // Fallback: match by content and approximate timestamp
+            const contentElement = element.querySelector('.message-content');
+            const timeElement = element.querySelector('.message-time');
+
+            if (contentElement && timeElement) {
+                const elementContent = contentElement.textContent.trim();
+                const elementTime = timeElement.textContent;
+
+                if (elementContent === message.content) {
+                    // Check if timestamps are close (within 1 minute)
+                    const messageTime = new Date(message.timestamp);
+                    const displayTime = messageTime.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+
+                    if (elementTime === displayTime) {
+                        return element;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 }
 
