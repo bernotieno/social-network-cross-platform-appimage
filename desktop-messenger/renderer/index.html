@@ -78,6 +78,19 @@
                 
                 <div class="search-container">
                     <input type="text" id="search-input" placeholder="Search conversations..." class="search-input">
+                    <div id="search-results-panel" class="search-results-panel" style="display: none;">
+                        <div class="search-results-header">
+                            <span id="search-results-count">0 results</span>
+                            <div class="search-navigation">
+                                <button id="search-prev-btn" class="btn btn-icon search-nav-btn" title="Previous result (Shift+Enter)">↑</button>
+                                <button id="search-next-btn" class="btn btn-icon search-nav-btn" title="Next result (Enter)">↓</button>
+                                <button id="search-close-btn" class="btn btn-icon search-nav-btn" title="Close search (Escape)">✕</button>
+                            </div>
+                        </div>
+                        <div id="search-results-list" class="search-results-list">
+                            <!-- Search results will be populated here -->
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="contacts-list" id="contacts-list">
