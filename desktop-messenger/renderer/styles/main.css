@@ -442,6 +442,7 @@ body {
     padding: var(--space-md) var(--space-lg);
     border-bottom: 1px solid var(--border-color);
     background: var(--background-secondary);
+    position: relative;
 }
 
 .search-input {
@@ -465,6 +466,88 @@ body {
     border-color: var(--primary-500);
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1), var(--shadow-md);
     transform: translateY(-1px);
+}
+
+/* Search Results Panel */
+.search-results-panel {
+    position: absolute;
+    top: 100%;
+    left: var(--space-lg);
+    right: var(--space-lg);
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    max-height: 400px;
+    overflow: hidden;
+}
+
+.search-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--foreground-muted);
+}
+
+.search-navigation {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.search-nav-btn {
+    padding: 4px 6px;
+    font-size: 12px;
+    min-width: auto;
+    height: auto;
+}
+
+.search-results-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.search-result-item {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.search-result-item:hover {
+    background: var(--background-secondary);
+}
+
+.search-result-item.active {
+    background: var(--primary-100);
+    border-left: 3px solid var(--primary-500);
+}
+
+.search-result-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.search-result-preview {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.search-result-preview mark {
+    background: var(--warning);
+    color: var(--foreground);
+    padding: 1px 2px;
+    border-radius: 2px;
+}
+
+.search-result-time {
+    font-size: 11px;
+    color: var(--foreground-muted);
 }
 
 .contacts-list {
@@ -667,14 +750,92 @@ body {
     margin-top: 4px;
 }
 
-.message.sending {
-    opacity: 0.6;
+/* Message status styles */
+.message.status-sending {
+    opacity: 0.7;
 }
 
-.message.sending::after {
-    content: " (sending...)";
-    font-size: 11px;
-    opacity: 0.7;
+.message.status-failed {
+    border-left: 3px solid #e74c3c;
+}
+
+.message.status-queued {
+    opacity: 0.8;
+    border-left: 3px solid #f39c12;
+}
+
+.message.status-sent {
+    opacity: 1;
+}
+
+.message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+    gap: 8px;
+}
+
+.message-status {
+    font-size: 10px;
+    opacity: 0.8;
+    font-weight: 500;
+}
+
+.message-status.sending {
+    color: #3498db;
+}
+
+.message-status.queued {
+    color: #f39c12;
+}
+
+.message-status.sent {
+    color: #2ecc71;
+}
+
+.message-status.failed {
+    color: #e74c3c;
+}
+
+.retry-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.retry-btn:hover {
+    background: #c0392b;
+}
+
+.retry-btn:active {
+    transform: scale(0.95);
+}
+
+/* Search highlighting */
+.message.search-highlighted {
+    background: rgba(255, 235, 59, 0.2) !important;
+    border-left: 3px solid #ffc107 !important;
+    animation: searchPulse 0.5s ease-in-out;
+}
+
+.search-highlight {
+    background: #ffc107;
+    color: #000;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+@keyframes searchPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
 }
 
 /* Message input */
